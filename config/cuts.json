@@ -15,7 +15,7 @@
     "chi2pid_min": -5.0,
     "chi2pid_max": 5.0,
     "_chi2pid_comment": "Standard EB PID quality. Old code: ElectronCutsService::MIN_CHI2PID/MAX_CHI2PID.",
-    "min_momentum_gev": 2.0,
+    "min_momentum_gev": 1.8,
     "_min_momentum_comment": "TRAP: the old cutflow printed the row label 'Momentum > 0.8 GeV', but the applied cut was p > MIN_ELECTRON_MOMENTUM = 2.0 GeV (verified: ElectronCutsService.hpp:87). The 0.8 label was a stale string, repeated in the electron-analysis algorithm, and ANY cutflow table copied from the old logs inherits the error. The effective cut is and always was 2.0 GeV. Do not quote 0.8.",
     "sampling_fraction": {
       "_comment": "Note sec:sampling-fraction. SF = (E_PCAL + E_ECIN + E_ECOUT) / p, compared against a per-sector, per-polarity third-order polynomial in p for both mean and width: mu(p) = a + b*p + c*p^2 + d*p^3, same form for sigma(p). Cut is mu(p) - n_sigma*sigma(p) < SF < mu(p) + n_sigma*sigma(p). Requires a valid PCAL sector in [1,6].",
@@ -26,9 +26,9 @@
     "pcal_lv_min_cm": 9.0,
     "pcal_lw_min_cm": 9.0,
     "_pcal_fiducial_comment": "Loose level. Photons use the HARDER 14.0 cm (see photon.pcal_lv_min_cm) -- the two are deliberately different; do not unify them. TRAP: the old code declared pcal_lv_min/pcal_lw_min as algorithm Properties and set them in six TOML files where they were NEVER READ (note sec:appendix-dead-config); the real cut came from ElectronCutsService constants. Anyone who tuned the TOML changed nothing.",
-    "dc_edge_r1_cm": 1.68,
-    "dc_edge_r2_cm": 2.0,
-    "dc_edge_r3_cm": 8.75,
+    "dc_edge_r1_cm": 1.88,
+    "dc_edge_r2_cm": 2.08,
+    "dc_edge_r3_cm": 8.62,
     "_dc_edge_comment": "REC::Traj edge distance, DC layers 6 / 18 / 36 respectively. Same dead-config trap as the PCAL fiducial: the old dc_r{1,2,3}_edge_min TOML keys were declared, set, and never read.",
     "trigger": {
       "_comment": "Note sec:trigger-electron. The scattered electron is the FIRST REC::Particle row satisfying all of: pid == 11, status < 0, status_min <= |status| < status_max (i.e. in the Forward Detector), and a non-zero momentum vector. 'First matching row', not 'highest momentum' -- this is an ordering dependence inherited from the old code, preserved deliberately.",
