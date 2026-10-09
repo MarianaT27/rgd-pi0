@@ -571,6 +571,7 @@ def stagea_wrapper(
         "# exited 0. Observed on workflow rgd_pi0_stageA_LD2_TRAINTEST.",
         "run() {",
     ]
+    lines.append("module use /scigroup/cvmfs/hallb/clas12/sw/modulefiles")
     for mod in cfg.swif2.modules:
         lines.append(f"module load {_q(mod)}")
     for k, v in sorted(cfg.env.items()):

@@ -41,3 +41,13 @@ __pycache__/
 *.swp
 compile_commands.json
 /batch_scripts/
+
+# local data and outputs (not in git)
+/diag3/
+/farm/
+/farm_full/
+/kin_full/
+/analysis/diag3/
+/analysis/f10/
+/analysis/full/
+/analysis/logs/

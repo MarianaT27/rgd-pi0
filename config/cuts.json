@@ -202,8 +202,8 @@
     },
     "polarization": {
       "_comment": "BEAM POLARIZATION. THESE ARE NULL ON PURPOSE AND MUST STAY NULL until an RG-D Moller measurement is available for the run period. Null means NOT MEASURED. pi0/bsa.py REFUSES TO RUN when both this key and its --polarization argument are absent; it does not substitute a value. The superseded analysis hard-coded BEAM_POLARIZATION = 0.85, self-declared as a placeholder in its own source, and every A_LU it published is therefore provisional by a factor 0.85 / P_true (note sec:bsa-polarization). Its companion BEAM_POLARIZATION_ERR = 0.03 was defined and never imported anywhere, so the ~3.5% fully-correlated scale uncertainty is missing from every old number; `error` below is that value's proper home and IS propagated by pi0/bsa.py.",
-      "value": null,
-      "error": null
+      "value": 0.790,
+      "error": 0.015
     },
     "_range_comment": "THE RANGE IS NOT A FREE CHOICE. pi0::kin::compute_sidis returns phi_h from atan2 in the TRENTO convention, so it lands in [-180, 180]. An axis over [0, 360] -- the other common convention -- would put every negative phi_h off the grid, and an off-grid value is DISCARDED WITHOUT AN ERROR: half the data would vanish silently and the asymmetry would still fit and still look like an asymmetry. Cuts::load refuses any axis narrower than [-180, 180] for exactly that reason. If the convention ever changes, change the producer and this key together.",
     "_helicity_comment": "There is deliberately NO helicity key here. helicity == 0 means UNDEFINED (REC::Event.helicity, 0=UDF -- see stageA_skim's helicity.convention provenance), not a third state to configure. stageB_bin fills the BSA for helicity == +-1 only, and lets helicity == 0 events enter every other output, because the m_gg spectra, the donor pool and N_DIS are all helicity-blind. Dropping helicity == 0 from the pool would shrink the donor sample for no physics reason and give the mixed background a different parent sample from the same-event spectrum it has to subtract from.",
