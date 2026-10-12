@@ -272,6 +272,7 @@
       ],
       "_q2_edges_comment": "9 edges -> 8 bins. Note sec:aux-grids.",
       "xb_edges": [
+        0.06,
         0.1,
         0.15,
         0.2,

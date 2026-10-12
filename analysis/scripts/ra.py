@@ -30,6 +30,9 @@ import matplotlib.pyplot as plt
 SAMPLES = {
     "diag3": {"dir": "analysis/diag3", "results": "results3",     "label": "3% sample"},
     "f10":   {"dir": "analysis/f10",   "results": "results_f10",  "label": "10% sample"},
+    "full_z10": {"dir": "analysis/full_z10", "results": "results_full", "label": "full sample, 10 z bins"},
+    "full_z10": {"dir": "analysis/full_z10", "results": "results_full", "label": "full sample, 10 z bins"},
+    "full_z10_v2": {"dir": "analysis/full_z10_v2", "results": "results_full", "label": "full sample, 10 z bins, pool from xB 0.06"},
     "full":  {"dir": "analysis/full",  "results": "results_full", "label": "full sample"},
 }
 TARGETS = ["CxC", "Cu", "Sn"]
@@ -190,3 +193,101 @@ fig.savefig(f"{OUT}/ra_compare_pip_{S}.png", dpi=150)
 plt.close(fig)
 
 print(f"\nwrote {OUT}/ra_vs_z_{S}.pdf/.png, {OUT}/ra_vs_z_nu_{S}.pdf/.png, {OUT}/ra_compare_pip_{S}.png")
+
+# ---------------------------------------------------------------- R_A maps, one figure per pT2 bin
+# One panel per (Q2, xB) cell of Grid A: rows = Q2 (lowest at the bottom), columns = xB
+# (lowest at the left). Every point is ONE 4D bin, R and sR taken straight from
+# ratio_<T>.csv (no summing over bins). Empty panel = no surviving bin.
+# Bin ranges are read from config/binning/grid_*.json. They are only used if every bin's
+# mean value lies inside its edges (i.e. the grid on disk is the one this sample used);
+# otherwise the panels fall back to the mean <Q2>, <xB>, <pT2>.
+import json
+
+n_q2 = int(max(data[t]["i_q2"].max() for t in TARGETS)) + 1
+n_xb = int(max(data[t]["i_xb"].max() for t in TARGETS)) + 1
+n_pt2 = int(max(data[t]["i_pt2"].max() for t in TARGETS)) + 1
+ref = data["CxC"]
+
+
+def grid_edges(path, names):
+    try:
+        g = json.load(open(path))
+        return {a["name"]: np.array(a["edges"]) for a in g["axes"] if a["name"] in names}
+    except Exception:
+        return {}
+
+
+edges = {**grid_edges("config/binning/grid_A_q2_xb.json", ("q2", "xb")),
+         **grid_edges("config/binning/grid_B_z_pt2.json", ("pt2",))}
+use_edges = len(edges) == 3 and len(edges["q2"]) == n_q2 + 1 and len(edges["xb"]) == n_xb + 1 \
+    and len(edges["pt2"]) == n_pt2 + 1
+if use_edges:
+    for t in TARGETS:
+        d = data[t]
+        for v, idx in (("q2", "i_q2"), ("xb", "i_xb"), ("pt2", "i_pt2")):
+            e, i = edges[v], d[idx].astype(int)
+            if not np.all((d[f"{v}_mean"] >= e[i] - 1e-9) & (d[f"{v}_mean"] <= e[i + 1] + 1e-9)):
+                use_edges = False
+if not use_edges:
+    print("\nNOTE: config/binning does not match this sample's bins; map labels show mean values, not ranges")
+
+cell_q2, cell_xb = {}, {}
+for c in np.unique(ref["cell_a"]).astype(int):      # LD2-yield-weighted <Q2>, <xB> of each cell
+    k = ref["cell_a"] == c
+    cell_q2[c] = np.sum(ref["Y_D"][k] * ref["q2_mean"][k]) / np.sum(ref["Y_D"][k])
+    cell_xb[c] = np.sum(ref["Y_D"][k] * ref["xb_mean"][k]) / np.sum(ref["Y_D"][k])
+
+print(f"\n=== R_A maps (one 4D bin per point), {n_q2} Q2 rows x {n_xb} xB columns")
+for ip in range(n_pt2):
+    kp = ref["i_pt2"] == ip
+    pt2m = np.sum(ref["Y_A"][kp] * ref["pt2_mean"][kp]) / np.sum(ref["Y_A"][kp])
+    allR = np.concatenate([data[t]["R"][data[t]["i_pt2"] == ip] for t in TARGETS])
+    lo, hi = np.percentile(allR, [2, 98])
+    fig, axes = plt.subplots(n_q2, n_xb, figsize=(2.1 * n_xb, 1.8 * n_q2), sharex=True, sharey=True)
+    n_filled = 0
+    for iq in range(n_q2):
+        for ix in range(n_xb):
+            ax = axes[n_q2 - 1 - iq, ix]
+            filled = False
+            for i, t in enumerate(TARGETS):
+                d = data[t]
+                s = (d["i_q2"] == iq) & (d["i_xb"] == ix) & (d["i_pt2"] == ip)
+                if s.sum() == 0:
+                    continue
+                filled = True
+                ax.errorbar(d["z_mean"][s] + (i - 1) * 0.006, d["R"][s], yerr=d["sR"][s], fmt="o", ms=2.5,
+                            lw=0.8, capsize=1, color=COLORS[t], label=LABELS[t])
+            ax.axhline(1, color="gray", lw=0.6, ls="--")
+            c = iq * n_xb + ix
+            if use_edges:
+                lab = (f"Q2 {edges['q2'][iq]:.2f}-{edges['q2'][iq + 1]:.2f}\n"
+                       f"xB {edges['xb'][ix]:.3f}-{edges['xb'][ix + 1]:.3f}")
+            elif c in cell_q2:
+                lab = f"<Q2> {cell_q2[c]:.2f}\n<xB> {cell_xb[c]:.3f}"
+            else:
+                lab = ""
+            ax.text(0.03, 0.95, lab, transform=ax.transAxes, va="top", fontsize=6)
+            if filled:
+                n_filled += 1
+            else:
+                ax.text(0.5, 0.4, "no bins", transform=ax.transAxes, ha="center", va="center", fontsize=6, color="gray")
+    axes[0, 0].set_ylim(lo - 0.1 * (hi - lo), hi + 0.1 * (hi - lo))
+    axes[0, 0].set_xlim(0, 1)
+    handles, labels = [], []
+    for row in axes:
+        for ax in row:
+            if not handles:
+                handles, labels = ax.get_legend_handles_labels()
+    fig.legend(handles[:3], labels[:3], loc="upper right", ncol=3, frameon=False, fontsize=9)
+    if use_edges:
+        ptxt = f"{edges['pt2'][ip]:.3f} < pT2 < {edges['pt2'][ip + 1]:.3f} GeV2 (<pT2> = {pt2m:.3f})"
+    else:
+        ptxt = f"pT2 bin {ip} (<pT2> = {pt2m:.3f} GeV2)"
+    fig.suptitle(f"R_A per 4D bin, {ptxt}.  Q2 in GeV2.   {TAG}", fontsize=9)
+    fig.supxlabel(r"$\langle z \rangle$")
+    fig.supylabel(r"$R_A$")
+    fig.tight_layout(rect=(0, 0, 1, 0.97))
+    for ext in ("pdf", "png"):
+        fig.savefig(f"{OUT}/ra_map_pt2bin{ip}_{S}.{ext}", dpi=150)
+    plt.close(fig)
+    print(f"  {ptxt}: {n_filled} of {n_q2 * n_xb} cells with points -> {OUT}/ra_map_pt2bin{ip}_{S}.pdf/.png")

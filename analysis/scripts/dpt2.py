@@ -30,6 +30,9 @@ import matplotlib.pyplot as plt
 SAMPLES = {
     "diag3": {"dir": "analysis/diag3", "results": "results3",     "label": "3% sample"},
     "f10":   {"dir": "analysis/f10",   "results": "results_f10",  "label": "10% sample"},
+    "full_z10": {"dir": "analysis/full_z10", "results": "results_full", "label": "full sample, 10 z bins"},
+    "full_z10": {"dir": "analysis/full_z10", "results": "results_full", "label": "full sample, 10 z bins"},
+    "full_z10_v2": {"dir": "analysis/full_z10_v2", "results": "results_full", "label": "full sample, 10 z bins, pool from xB 0.06"},
     "full":  {"dir": "analysis/full",  "results": "results_full", "label": "full sample"},
 }
 TARGETS = {"CxC": 12.011, "Cu": 63.546, "Sn": 118.71}

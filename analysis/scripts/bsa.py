@@ -35,6 +35,9 @@ SAMPLES = {
               "label": "3% sample"},
     "f10":   {"dir": "analysis/f10",   "results": "results_f10",  "bsa": None,
               "label": "10% sample"},
+    "full_z10": {"dir": "analysis/full_z10", "results": "results_full", "bsa": "analysis/full_z10/results_full/bsa_{t}.csv", "label": "full sample, 10 z bins"},
+    "full_z10": {"dir": "analysis/full_z10", "results": "results_full", "bsa": "analysis/full_z10/results_full/bsa_{t}.csv", "label": "full sample, 10 z bins"},
+    "full_z10_v2": {"dir": "analysis/full_z10_v2", "results": "results_full", "bsa": "analysis/full_z10_v2/results_full/bsa_{t}.csv", "label": "full sample, 10 z bins, pool from xB 0.06"},
     "full":  {"dir": "analysis/full",  "results": "results_full", "bsa": "analysis/full/results_full/bsa_{t}.csv",
               "label": "full sample"},
 }
