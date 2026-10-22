@@ -36,12 +36,18 @@
 // implementation illustrates a selection that never ran.
 //
 // ---------------------------------------------------------------------------
-// WHY >= 1 PHOTON AND NOT >= 2
+// WHY THERE IS NO PHOTON REQUIREMENT
 // ---------------------------------------------------------------------------
-// A pi0 needs two photons, so it is tempting to require two here. Do not. The
-// mixed-event background (stage C) draws its donor photons from single-photon
-// events as much as from multi-photon ones; requiring two would silently shrink
-// the donor pool and change the background shape, not just the file size.
+// EVERY event passing the electron and DIS cuts is written, including events
+// with zero selected photons (empty photon arrays). Stage B counts N_DIS, the
+// normalisation of the multiplicity ratio, from the slim events, and N_DIS must
+// be INCLUSIVE (note, Sec. 7). The earlier ">= 1 selected photon" requirement
+// made N_DIS count only DIS events with a photon, a fraction that falls with A
+// (0.217 D, 0.198 C, 0.168 Cu, 0.152 Sn in the full sample) and so biased R_A
+// upward by p_D/p_A. Zero-photon events make no pairs and donate nothing to the
+// mixing pool, so the spectra and the background are unchanged; only N_DIS is.
+// Do not require two photons either, for the same reason, and because the
+// mixed-event pool draws its donors from single-photon events too.
 //
 // ---------------------------------------------------------------------------
 // WHY THE MODEL IS CHOSEN ONCE, BEFORE THE EVENT LOOP
@@ -851,9 +857,9 @@ void process_event(const RVecI& p_pid, const RVecF& p_px, const RVecF& p_py, con
         g_e_gamma_deg.push_back(pi0::kin::angle_between_deg(gx, gy, gz, ex, ey, ez));
     }
 
-    // >= 1, NOT >= 2 -- single-photon events feed the mixed-event donor pool.
-    if (gpx.empty()) return;
-    ++buf.cnt.n_has_photon;
+    // NO photon requirement: every DIS event is written so that Stage B's N_DIS
+    // is inclusive (see the file header). n_has_photon is kept for the cutflow.
+    if (!gpx.empty()) ++buf.cnt.n_has_photon;
 
     // The FILE's run, not this_run. They differ only when RUN::config was unfilled
     // for this event (this_run == 0), and a 0 in the run branch is a landmine for
@@ -1530,7 +1536,8 @@ int main(int argc, char* argv[]) {
                  "Caveat: the sign is therefore an INHERITED assumption -- no HWP-in/HWP-out closure "
                  "test exists in this chain. Settle it before publishing a signed asymmetry. "
                  "helicity == 0 means undefined and is dropped downstream.");
-        prov.add("photon.min_multiplicity", "1 (deliberate: single-photon events feed the mixed-event donor pool)");
+        prov.add("photon.min_multiplicity",
+                 "0 (every DIS event is written, so that Stage B's N_DIS is inclusive; zero-photon events make no pairs)");
         // NOT cosmetic, and not omittable when the flag is absent. events.input_tag0
         // is the count this program READ, which is the file's total only if it
         // read all of it -- so the two keys must be read together, and a key
@@ -1704,7 +1711,8 @@ int main(int argc, char* argv[]) {
         rows.push_back({"DIS: Q2 > " + fmt(cuts.dis.q2_min) + " GeV^2", n_q2});
         rows.push_back({"DIS: W > " + fmt(cuts.dis.w_min) + " GeV", n_w});
         rows.push_back({"DIS: y < " + fmt(cuts.dis.y_max), n_y});
-        rows.push_back({">= 1 selected photon (GBT score > " + fmt(cuts.photon.gbt_threshold) + ")", n_has_photon});
+        rows.push_back({"(info, not a cut) >= 1 selected photon (GBT score > " + fmt(cuts.photon.gbt_threshold) + ")",
+                        n_has_photon});
         rows.push_back({"written to " + args.output, n_written});
         print_cutflow(rows);
 
