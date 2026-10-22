@@ -1116,3 +1116,33 @@ TEST_CASE("the photon-electron angle cut lives UPSTREAM of find_gg_pairs",
         CHECK(pi0::find_gg_pairs(filter_e_gamma(just_over, cuts), cuts).size() == 1);
     }
 }
+
+TEST_CASE("compute_sidis x_F recovers a CM longitudinal momentum built by construction", "[kin][sidis][xf]") {
+    // Build a pi0 with a chosen CM longitudinal momentum p* = f * p_max along q,
+    // boost it to the lab with gamma = (nu + M) / W and beta*gamma = |q| / W, and
+    // check that compute_sidis returns x_F = f. f = +-1 are the exclusive limits.
+    const double beam = 10.53, e_prime = 4.0, theta = 20.0 * M_PI / 180.0;
+    const double ex = e_prime * std::sin(theta), ey = 0.0, ez = e_prime * std::cos(theta);
+    const pi0::DisKin d = pi0::kin::compute_dis(ex, ey, ez, e_prime, beam);
+    const double qx = -ex, qz = beam - ez, q = std::sqrt(qx * qx + qz * qz);
+    const double m_n = pi0::kProtonMassGeV, m_h = pi0::kPi0MassGeV, w = d.w;
+    const double g = (d.nu + m_n) / w, bg = q / w;
+    const double a = w * w + m_h * m_h - m_n * m_n;
+    const double p_max = std::sqrt(a * a - 4.0 * w * w * m_h * m_h) / (2.0 * w);
+    for (const double f : {-1.0, -0.5, 0.0, 0.3, 1.0}) {
+        const double ps = f * p_max, es = std::sqrt(ps * ps + m_h * m_h);
+        const double pl = g * ps + bg * es, e = g * es + bg * ps;
+        const pi0::SidisKin s =
+            pi0::kin::compute_sidis(pl * qx / q, 0.0, pl * qz / q, e, d, ex, ey, ez, e_prime, beam);
+        CHECK_THAT(s.xf, WithinAbs(f, 1e-9));
+    }
+}
+
+TEST_CASE("compute_sidis x_F is NaN below the pi0 + nucleon threshold", "[kin][sidis][xf][guard]") {
+    pi0::DisKin d{};
+    d.q2 = 1.0;
+    d.nu = 0.6;
+    d.w = 1.0;  // below M_p + m_pi0
+    const pi0::SidisKin s = pi0::kin::compute_sidis(0.0, 0.0, 0.5, 0.52, d, 0.5, 0.0, 9.0, 9.0, 10.53);
+    CHECK(std::isnan(s.xf));
+}

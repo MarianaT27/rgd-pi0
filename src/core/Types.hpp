@@ -11,6 +11,7 @@
 
 #include <cmath>
 #include <cstddef>
+#include <limits>
 
 namespace pi0 {
 
@@ -49,6 +50,12 @@ struct SidisKin {
     double z{};           ///< E_h / nu, dimensionless
     double pt2{};         ///< GeV^2, transverse to the virtual photon
     double phi_h_deg{};   ///< Trento convention, DEGREES, range [-180, 180]
+    /// Feynman x = p_L* / p_L,max* in the gamma*-nucleon CM frame (nucleon = proton
+    /// mass, as for x_B and W). Positive: hadron forward along the virtual photon
+    /// (current region); negative: backward (target region). p_L,max* is the
+    /// exclusive limit e N -> e' pi0 N. NaN when undefined (W <= M_p + m_pi0, or no
+    /// virtual photon), so a NaN can never land in a histogram bin by accident.
+    double xf{std::numeric_limits<double>::quiet_NaN()};
 };
 
 }  // namespace pi0

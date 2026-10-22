@@ -121,6 +121,23 @@ SidisKin compute_sidis(double hx, double hy, double hz, double he, const DisKin&
     const Vec3 p_perp{p_h.x - p_long * q_hat.x, p_h.y - p_long * q_hat.y, p_h.z - p_long * q_hat.z};
     s.pt2 = dot(p_perp, p_perp);
 
+    // Feynman x. Boost along q-hat into the gamma*-nucleon CM frame (nucleon at
+    // rest in the lab, proton mass as for x_B and W): gamma = (nu + M) / W,
+    // beta*gamma = |q| / W, so p_L* = ((nu + M) p_L - |q| E_h) / W. The maximum
+    // is the CM momentum of the exclusive final state pi0 + nucleon at this W.
+    // Computed BEFORE the Trento early return below: it needs no lepton plane.
+    {
+        constexpr double m_n = kProtonMassGeV;
+        constexpr double m_h = kPi0MassGeV;
+        const double w = dis.w;
+        if (w > m_n + m_h) {
+            const double pl_star = ((dis.nu + m_n) * p_long - q_mag * he) / w;
+            const double a = w * w + m_h * m_h - m_n * m_n;
+            const double pl_max = std::sqrt(a * a - 4.0 * w * w * m_h * m_h) / (2.0 * w);
+            s.xf = pl_star / pl_max;
+        }
+    }
+
     // Trento frame. y_hat is normal to the lepton scattering plane.
     const Vec3 y_raw = cross(q, k_beam);
     const double y_mag = norm(y_raw);

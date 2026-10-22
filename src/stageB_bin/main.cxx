@@ -744,6 +744,11 @@ struct PartitionPartial {
     std::vector<Ptb3dPartial> ptb;         ///< [bin3d * n_mgg + imgg]
     std::vector<std::int64_t> n_dis;       ///< [cell_a]
     std::vector<std::int64_t> bsa;         ///< dense BSA index (see the schema block)
+    // x_F study: (z, x_F, m_gg) same- and mixed-event pair counts, for pairs in a
+    // 4D analysis bin. Two z axes: a fine uniform one (xf_*) and Grid B's z bins
+    // (xfb_*). Index = (iz * n_xf + ixf) * n_mgg + imgg.
+    std::vector<std::int64_t> xf_same, xf_mixed;    ///< fine z
+    std::vector<std::int64_t> xfb_same, xfb_mixed;  ///< Grid B z
 
     // Flat cutflow counters -- integers, order-independent.
     long long n_events{};
@@ -760,13 +765,17 @@ struct PartitionPartial {
     long long n_hel_undef{};
     long long n_no_pool_bin{};
 
-    PartitionPartial(int n4d, int n3d, int n_a, int n_mgg, int n_phi)
+    PartitionPartial(int n4d, int n3d, int n_a, int n_mgg, int n_phi, int n_xfz, int n_zb, int n_xf)
         : spectra(static_cast<std::size_t>(n4d) * static_cast<std::size_t>(n_mgg)),
           ptb(static_cast<std::size_t>(n3d) * static_cast<std::size_t>(n_mgg)),
           n_dis(static_cast<std::size_t>(n_a), 0),
           bsa(static_cast<std::size_t>(n4d) * static_cast<std::size_t>(n_mgg) *
                   static_cast<std::size_t>(n_phi) * 2u,
-              0) {}
+              0),
+          xf_same(static_cast<std::size_t>(n_xfz) * static_cast<std::size_t>(n_xf) * static_cast<std::size_t>(n_mgg), 0),
+          xf_mixed(xf_same.size(), 0),
+          xfb_same(static_cast<std::size_t>(n_zb) * static_cast<std::size_t>(n_xf) * static_cast<std::size_t>(n_mgg), 0),
+          xfb_mixed(xfb_same.size(), 0) {}
 
     /// Fold `o` into this. Called in PARTITION-INDEX ORDER: `total.merge(part[0]);
     /// total.merge(part[1]); ...`. The sums' merge is index-order-sensitive by
@@ -776,6 +785,10 @@ struct PartitionPartial {
         for (std::size_t i = 0; i < ptb.size(); ++i) ptb[i].merge(o.ptb[i]);
         for (std::size_t i = 0; i < n_dis.size(); ++i) n_dis[i] += o.n_dis[i];
         for (std::size_t i = 0; i < bsa.size(); ++i) bsa[i] += o.bsa[i];
+        for (std::size_t i = 0; i < xf_same.size(); ++i) xf_same[i] += o.xf_same[i];
+        for (std::size_t i = 0; i < xf_mixed.size(); ++i) xf_mixed[i] += o.xf_mixed[i];
+        for (std::size_t i = 0; i < xfb_same.size(); ++i) xfb_same[i] += o.xfb_same[i];
+        for (std::size_t i = 0; i < xfb_mixed.size(); ++i) xfb_mixed[i] += o.xfb_mixed[i];
         n_events += o.n_events;
         n_off_grid_a += o.n_off_grid_a;
         n_gamma_total += o.n_gamma_total;
@@ -821,6 +834,20 @@ int main(int argc, char* argv[]) {
         const int n4d = binning.n4d();
         const int n3d = binning.n3d();
         const int n_a = binning.A.ncells();
+
+        // x_F study axes. Fixed here, not in cuts.json: they define a diagnostic
+        // histogram, not a selection, and are written to the provenance below.
+        const pi0::Grid1D xfz_axis = uniform_axis("z_xf", 0.0, 1.0, 50);
+        const pi0::Grid1D xf_axis = uniform_axis("xf", -3.0, 1.5, 90);
+        const int n_xfz = xfz_axis.nbins();
+        const int n_xf = xf_axis.nbins();
+        const int n_zb = binning.B.x.nbins();
+        // Flat index into the xf_* / xfb_* arrays, or -1 if any axis misses.
+        auto xf_index = [&](int iz, double xf, int imgg) -> long long {
+            const int ixf = xf_axis.find(xf);
+            if (iz < 0 || ixf < 0 || imgg < 0) return -1;
+            return (static_cast<long long>(iz) * n_xf + ixf) * n_mgg + imgg;
+        };
 
         // ---- the chain -----------------------------------------------------
         // Read every input's identity and provenance, order the chain, and
@@ -1116,6 +1143,12 @@ int main(int argc, char* argv[]) {
                     if (bin4d < 0) continue;
                     ++out.n_same_binned;
 
+                    // x_F study: same population as the yield (pair in a 4D bin).
+                    if (const long long kx = xf_index(xfz_axis.find(s.z), s.xf, imgg); kx >= 0)
+                        ++out.xf_same[static_cast<std::size_t>(kx)];
+                    if (const long long kx = xf_index(binning.B.x.find(s.z), s.xf, imgg); kx >= 0)
+                        ++out.xfb_same[static_cast<std::size_t>(kx)];
+
                     // *** THE ABSCISSA FIX. Per (4D bin, m_gg bin). *** Compensated
                     // sums (NeumaierSum::add), merged in partition-index order.
                     SpectrumPartial& c =
@@ -1217,6 +1250,11 @@ int main(int argc, char* argv[]) {
                         if (bin4d < 0) continue;
                         ++out.n_mixed_binned;
 
+                        if (const long long kx = xf_index(xfz_axis.find(s.z), s.xf, imgg); kx >= 0)
+                            ++out.xf_mixed[static_cast<std::size_t>(kx)];
+                        if (const long long kx = xf_index(binning.B.x.find(s.z), s.xf, imgg); kx >= 0)
+                            ++out.xfb_mixed[static_cast<std::size_t>(kx)];
+
                         // n_mixed ONLY. No sum_* is touched here, and that is the
                         // point: a mixed pair's kinematics describe no pi0 and must
                         // never reach the abscissa.
@@ -1247,14 +1285,14 @@ int main(int argc, char* argv[]) {
         //   * `total` sees partition 0, then 1, then 2, ... in strict index order
         //     across every wave, which is what makes the compensated sums
         //     bit-identical to the single-partition (and hence single-thread) run.
-        PartitionPartial total(n4d, n3d, n_a, n_mgg, n_phi);
+        PartitionPartial total(n4d, n3d, n_a, n_mgg, n_phi, n_xfz, n_zb, n_xf);
         for (std::size_t wave_start = 0; wave_start < n_part; wave_start += lanes) {
             const std::size_t wave_end = std::min<std::size_t>(wave_start + lanes, n_part);
             const std::size_t wcount = wave_end - wave_start;
 
             std::vector<PartitionPartial> partials;
             partials.reserve(wcount);
-            for (std::size_t k = 0; k < wcount; ++k) partials.emplace_back(n4d, n3d, n_a, n_mgg, n_phi);
+            for (std::size_t k = 0; k < wcount; ++k) partials.emplace_back(n4d, n3d, n_a, n_mgg, n_phi, n_xfz, n_zb, n_xf);
 
             // A worker's throw must not cross the thread boundary; capture it and
             // rethrow on this thread after the join.
@@ -1314,6 +1352,10 @@ int main(int argc, char* argv[]) {
         }
         n_dis = std::move(total.n_dis);
         bsa = std::move(total.bsa);
+        const std::vector<std::int64_t> xf_same = std::move(total.xf_same);
+        const std::vector<std::int64_t> xf_mixed = std::move(total.xf_mixed);
+        const std::vector<std::int64_t> xfb_same = std::move(total.xfb_same);
+        const std::vector<std::int64_t> xfb_mixed = std::move(total.xfb_mixed);
 
         const long long n_events = total.n_events;
         const long long n_off_grid_a = total.n_off_grid_a;
@@ -1527,6 +1569,44 @@ int main(int argc, char* argv[]) {
             t->Write();
         }
 
+        // --- xf_z / xf_zb: per (z bin, x_F bin, m_gg bin) --------------------
+        // x_F study. Same- and mixed-event pair counts for pairs in a 4D analysis
+        // bin, so the background can be subtracted per (z, x_F) cell exactly as
+        // the yield is. xf_z uses a fine uniform z axis, xf_zb uses Grid B's z
+        // bins; both share the x_F and m_gg axes (see provenance). DENSE.
+        auto write_xf_tree = [&](const char* name, const char* title, int nz, const std::vector<std::int64_t>& same,
+                                 const std::vector<std::int64_t>& mixed) {
+            int b_iz = 0, b_ixf = 0, b_imgg = 0;
+            std::int64_t b_n_same = 0, b_n_mixed = 0;
+            auto* t = new TTree(name, title);
+            t->Branch("iz", &b_iz, "iz/I");
+            t->Branch("ixf", &b_ixf, "ixf/I");
+            t->Branch("imgg", &b_imgg, "imgg/I");
+            t->Branch("n_same", &b_n_same, "n_same/L");
+            t->Branch("n_mixed", &b_n_mixed, "n_mixed/L");
+            for (int iz = 0; iz < nz; ++iz) {
+                for (int ixf = 0; ixf < n_xf; ++ixf) {
+                    for (int m = 0; m < n_mgg; ++m) {
+                        const std::size_t idx =
+                            (static_cast<std::size_t>(iz) * static_cast<std::size_t>(n_xf) + static_cast<std::size_t>(ixf)) *
+                                static_cast<std::size_t>(n_mgg) +
+                            static_cast<std::size_t>(m);
+                        b_iz = iz;
+                        b_ixf = ixf;
+                        b_imgg = m;
+                        b_n_same = same[idx];
+                        b_n_mixed = mixed[idx];
+                        t->Fill();
+                    }
+                }
+            }
+            t->Write();
+        };
+        write_xf_tree("xf_z", "x_F study: same/mixed pair counts per (fine z bin, x_F bin, m_gg bin)", n_xfz, xf_same,
+                      xf_mixed);
+        write_xf_tree("xf_zb", "x_F study: same/mixed pair counts per (Grid B z bin, x_F bin, m_gg bin)", n_zb,
+                      xfb_same, xfb_mixed);
+
         // ---- provenance ------------------------------------------------------
         // N + 1 directories, and none of them are merged.
         //
@@ -1646,6 +1726,9 @@ int main(int argc, char* argv[]) {
         prov.add("mgg_axis", std::to_string(cuts.mgg_histogram.bins) + " uniform bins over [" +
                                  fmt(cuts.mgg_histogram.min_gev) + ", " + fmt(cuts.mgg_histogram.max_gev) +
                                  "] GeV, from cuts.json /mgg_histogram");
+        prov.add("xf_axis", "90 uniform bins over [-3, 1.5]; x_F = p_L*/p_L,max* in the gamma*-proton CM frame, "
+                            "p_L,max* from e p -> e' pi0 p at the event's W (core/Kinematics.cpp)");
+        prov.add("xf_z_axis", "50 uniform bins over [0, 1] (tree xf_z); tree xf_zb uses Grid B's z edges");
         prov.add("phi_h_axis", std::to_string(cuts.bsa.n_phi_bins) + " uniform bins over [" +
                                    fmt(cuts.bsa.phi_min_deg) + ", " + fmt(cuts.bsa.phi_max_deg) +
                                    "] DEGREES, Trento convention, from cuts.json /bsa");
