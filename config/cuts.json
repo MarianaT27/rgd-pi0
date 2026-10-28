@@ -4,7 +4,7 @@
   "_generated": "2026-07-16",
   "beam": {
     "_comment": "Note sec:dis (eq:Q2/eq:nu). The old code carried THREE independent beam energies ([analysis] beam_energy, [Pi0Analysis] beam_energy, and a hard-coded BeamConfig default) that agreed only by coincidence -- all three happened to default to 10.53. Here there is exactly one.",
-    "energy_gev": 10.53,
+    "energy_gev": 10.54,
     "polarity": "outbending",
     "_polarity_comment": "This project is OUTBENDING-ONLY for now. Every polarity-dependent number below (sampling-fraction coefficients, vertex windows) is the outbending set. Inbending values exist in the note's appendix but are NOT loaded here; adding inbending requires a per-polarity block, not an edit of these numbers.",
     "proton_mass_gev": 0.938272,

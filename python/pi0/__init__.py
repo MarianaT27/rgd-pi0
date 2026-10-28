@@ -28,7 +28,7 @@ Three invariants hold across the package:
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = ["config", "io", "extract", "ratio", "broadening", "bsa", "qa", "__version__"]
 

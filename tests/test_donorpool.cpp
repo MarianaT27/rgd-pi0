@@ -142,17 +142,19 @@ bool identical(const std::vector<DonorPhoton>& a, const std::vector<DonorPhoton>
 // The shipped configuration
 // ---------------------------------------------------------------------------
 
-TEST_CASE("the shipped pool grid is 8 x 7 x 4 = 224 bins", "[donorpool][config]") {
+TEST_CASE("the shipped pool grid is 8 x 8 x 4 = 256 bins", "[donorpool][config]") {
     const PoolGridCuts& g = shipped_grid();
 
     // Transcribed from config/cuts.json, which is the source of truth. If these
     // ever disagree with it, IT WINS and this file is what changes -- but a
     // disagreement means someone moved the pool grid, and the note's eq:pool-key
     // says 224. That should be a deliberate act, which is why this is here.
+    // It was: commit 905cef6 added an x_B edge at 0.06 so Grid A's first column
+    // gets a background, making the pool 8 x 8 x 4 = 256.
     CHECK(g.q2.nbins() == 8);
-    CHECK(g.xb.nbins() == 7);
+    CHECK(g.xb.nbins() == 8);
     CHECK(g.n_photons_classes.size() == 4u);
-    CHECK(g.n_bins() == 224u);
+    CHECK(g.n_bins() == 256u);
 
     CHECK(shipped_mixing().donors_per_bin == 200u);
     CHECK(shipped_mixing().seed_mode == "file_hash");
@@ -181,43 +183,43 @@ TEST_CASE("Cuts::load reads the mixing block rather than defaulting it",
 
 TEST_CASE("pool_bin maps the shipped grid correctly", "[donorpool][binning]") {
     const DonorPool pool(shipped_grid(), 1u, 10u);
-    REQUIRE(pool.n_bins() == 224u);
+    REQUIRE(pool.n_bins() == 256u);
 
-    const int n_xb = 7, n_mult = 4;
+    const int n_xb = 8, n_mult = 4;
     const auto expect = [&](int i_q2, int i_xb, int i_mult) {
         return (i_q2 * n_xb + i_xb) * n_mult + i_mult;
     };
 
-    // Q^2 edges [1, 1.5, 2, 2.5, 3, 4, 5, 7, 11]; x_B edges [.1,.15,.2,.25,.3,.4,.5,.7].
+    // Q^2 edges [1, 1.5, 2, 2.5, 3, 4, 5, 7, 11]; x_B edges [.06,.1,.15,.2,.25,.3,.4,.5,.7].
     // The first cell of the grid, 1 photon -> bin 0.
-    CHECK(pool.pool_bin(1.0, 0.1, 1) == expect(0, 0, 0));
-    CHECK(pool.pool_bin(1.2, 0.12, 1) == 0);
+    CHECK(pool.pool_bin(1.0, 0.06, 1) == expect(0, 0, 0));
+    CHECK(pool.pool_bin(1.2, 0.08, 1) == 0);
 
     // Multiplicity is the FASTEST axis.
-    CHECK(pool.pool_bin(1.2, 0.12, 2) == expect(0, 0, 1));
-    CHECK(pool.pool_bin(1.2, 0.12, 3) == expect(0, 0, 2));
-    CHECK(pool.pool_bin(1.2, 0.12, 4) == expect(0, 0, 3));
+    CHECK(pool.pool_bin(1.2, 0.08, 2) == expect(0, 0, 1));
+    CHECK(pool.pool_bin(1.2, 0.08, 3) == expect(0, 0, 2));
+    CHECK(pool.pool_bin(1.2, 0.08, 4) == expect(0, 0, 3));
     // ... and >=4 absorbs everything above it, rather than falling off the grid.
-    CHECK(pool.pool_bin(1.2, 0.12, 9) == expect(0, 0, 3));
-    CHECK(pool.pool_bin(1.2, 0.12, 500) == expect(0, 0, 3));
+    CHECK(pool.pool_bin(1.2, 0.08, 9) == expect(0, 0, 3));
+    CHECK(pool.pool_bin(1.2, 0.08, 500) == expect(0, 0, 3));
 
     // x_B is the middle axis, Q^2 the slowest.
-    CHECK(pool.pool_bin(1.2, 0.22, 1) == expect(0, 2, 0));
-    CHECK(pool.pool_bin(2.2, 0.12, 1) == expect(2, 0, 0));
-    CHECK(pool.pool_bin(2.2, 0.22, 3) == expect(2, 2, 2));
+    CHECK(pool.pool_bin(1.2, 0.22, 1) == expect(0, 3, 0));
+    CHECK(pool.pool_bin(2.2, 0.08, 1) == expect(2, 0, 0));
+    CHECK(pool.pool_bin(2.2, 0.22, 3) == expect(2, 3, 2));
 
     // The last cell, and the top edge of BOTH axes lands in the last bin rather
     // than off the grid -- the one place the half-open rule is broken, and it is
     // Grid1D's documented behaviour (the old find_1d_bin() returned -1 there and
     // so dropped every value sitting exactly on the kinematic limit).
-    CHECK(pool.pool_bin(11.0, 0.7, 4) == expect(7, 6, 3));
-    CHECK(pool.pool_bin(11.0, 0.7, 4) == 223);
-    CHECK(pool.pool_bin(10.9, 0.69, 1) == expect(7, 6, 0));
+    CHECK(pool.pool_bin(11.0, 0.7, 4) == expect(7, 7, 3));
+    CHECK(pool.pool_bin(11.0, 0.7, 4) == 255);
+    CHECK(pool.pool_bin(10.9, 0.69, 1) == expect(7, 7, 0));
 
     // Bins are half-open at the bottom: a value ON an interior edge belongs to
     // the bin ABOVE it.
-    CHECK(pool.pool_bin(1.5, 0.12, 1) == expect(1, 0, 0));
-    CHECK(pool.pool_bin(1.2, 0.15, 1) == expect(0, 1, 0));
+    CHECK(pool.pool_bin(1.5, 0.08, 1) == expect(1, 0, 0));
+    CHECK(pool.pool_bin(1.2, 0.1, 1) == expect(0, 1, 0));
 }
 
 TEST_CASE("pool_bin returns -1 off the grid and for zero photons",
@@ -229,7 +231,7 @@ TEST_CASE("pool_bin returns -1 off the grid and for zero photons",
         CHECK(pool.pool_bin(11.01, 0.2, 1) == -1);  // above the top edge
     }
     SECTION("x_B out of range -- there is NO x_B cut, so this genuinely happens") {
-        CHECK(pool.pool_bin(2.0, 0.09, 1) == -1);
+        CHECK(pool.pool_bin(2.0, 0.05, 1) == -1);  // below the 0.06 edge
         CHECK(pool.pool_bin(2.0, 0.71, 1) == -1);
     }
     SECTION("zero photons is in no class, whatever the kinematics") {
@@ -552,7 +554,7 @@ TEST_CASE("offer() rejects a photon count contradicting the bin's class",
 TEST_CASE("report_underfilled names bins below depth", "[donorpool][qa]") {
     DonorPool pool(shipped_grid(), 1u, 50u);
 
-    // Fill one bin to depth, leave one thin, and leave the other 222 empty.
+    // Fill one bin to depth, leave one thin, and leave the other 254 empty.
     const int full = pool.pool_bin(1.2, 0.12, 1);
     const int thin = pool.pool_bin(2.2, 0.22, 1);
     REQUIRE(full >= 0);
@@ -577,14 +579,14 @@ TEST_CASE("report_underfilled names bins below depth", "[donorpool][qa]") {
     // Empty bins are called out separately: no donors at all is a different
     // problem from a sparse bin, and must not be lost in a list of near-misses.
     CHECK_THAT(out, Catch::Matchers::ContainsSubstring("EMPTY"));
-    CHECK_THAT(out, Catch::Matchers::ContainsSubstring("222 bin(s) received NO photons"));
+    CHECK_THAT(out, Catch::Matchers::ContainsSubstring("254 bin(s) received NO photons"));
 
     // The bin that reached depth is NOT named. A QA report that warns about
     // healthy bins is a report nobody reads.
     CHECK_THAT(out, !Catch::Matchers::ContainsSubstring("bin " + std::to_string(full) + " "));
 
     CHECK(pool.n_filled() == 2u);
-    CHECK(pool.n_bins() == 224u);
+    CHECK(pool.n_bins() == 256u);
 }
 
 TEST_CASE("report_underfilled is quiet when every bin reached depth",

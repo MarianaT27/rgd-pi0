@@ -34,7 +34,7 @@ MASS_WINDOW = 0.2
 MIN_MGG = 0.001
 E_GAMMA_MIN_DEG = 8.0
 OA_A, OA_B, OA_OFF = 17.561, 0.756, 1.0  # theta_min(p) = A exp(-B p) + offset
-EBEAM = 10.53
+EBEAM = 10.54
 
 
 def _opening_min_deg(p: float) -> float:

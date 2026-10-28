@@ -100,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
     for t, _, lbl in TARGETS:
         xy = _by_z(ratio[t], "R", "sR", zc[t])
         ax.errorbar(xy[:, 0], xy[:, 1], yerr=xy[:, 2], marker="o", ms=4, capsize=2,
-                    lw=1.2, color=COLORS[t], label=f"$R_{{{lbl}}}$")
+                    lw=1.2, ls="none", color=COLORS[t], label=f"$R_{{{lbl}}}$")
     ax.axhline(1.0, color="0.4", lw=0.8, ls="--")
     ax.set_xlabel(r"$\langle z \rangle$  (sideband-subtracted)")
     ax.set_ylabel(r"$R_A$")
@@ -136,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
     for t, _, lbl in TARGETS:
         xy = _by_z(broad[t], "delta", "sdelta", zc[t])
         ax.errorbar(xy[:, 0], xy[:, 1], yerr=xy[:, 2], marker="o", ms=4, capsize=2,
-                    lw=1.2, color=COLORS[t], label=lbl)
+                    lw=1.2, ls="none", color=COLORS[t], label=lbl)
     ax.axhline(0.0, color="0.4", lw=0.8, ls="--")
     ax.set_xlabel(r"$\langle z \rangle$")
     ax.set_ylabel(r"$\Delta\langle p_T^2 \rangle$  [GeV$^2$]")

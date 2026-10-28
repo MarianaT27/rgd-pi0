@@ -230,21 +230,21 @@ bool joins(const pi0::GGPair& p, std::size_t i, std::size_t j) {
 // ===========================================================================
 
 TEST_CASE("compute_dis reproduces a hand-computed DIS point", "[kin][dis]") {
-    // E_beam = 10.53, E' = 4.0 GeV, theta_e = 20 degrees.
+    // E_beam = 10.54, E' = 4.0 GeV, theta_e = 20 degrees.
     //
     // Worked out offline to full double precision:
-    //   Q2 = 4 * 10.53 * 4.0 * sin^2(10 deg)      = 5.0802936249950763
-    //   nu = 10.53 - 4.0                          = 6.53
-    //   y  = 6.53 / 10.53                         = 0.62013295346628683
-    //   xb = Q2 / (2 * 0.938272 * 6.53)           = 0.41458814616740869
-    //   W  = sqrt(Mp^2 + 2*Mp*nu - Q2)            = 2.8379381672243884
+    //   Q2 = 4 * 10.54 * 4.0 * sin^2(10 deg)      = 5.085118215332204
+    //   nu = 10.54 - 4.0                          = 6.54
+    //   y  = 6.54 / 10.54                         = 0.6204933586337761
+    //   xb = Q2 / (2 * 0.938272 * 6.54)           = 0.41434733825515724
+    //   W  = sqrt(Mp^2 + 2*Mp*nu - Q2)            = 2.8403932633795264
     const pi0::DisKin k = dis_at(4.0, 20.0);
 
-    REQUIRE_THAT(k.q2, WithinRel(5.0802936249950763, 1e-12));
-    REQUIRE_THAT(k.nu, WithinRel(6.53, 1e-12));
-    REQUIRE_THAT(k.y, WithinRel(0.62013295346628683, 1e-12));
-    REQUIRE_THAT(k.xb, WithinRel(0.41458814616740869, 1e-12));
-    REQUIRE_THAT(k.w, WithinRel(2.8379381672243884, 1e-12));
+    REQUIRE_THAT(k.q2, WithinRel(5.085118215332204, 1e-12));
+    REQUIRE_THAT(k.nu, WithinRel(6.54, 1e-12));
+    REQUIRE_THAT(k.y, WithinRel(0.6204933586337761, 1e-12));
+    REQUIRE_THAT(k.xb, WithinRel(0.41434733825515724, 1e-12));
+    REQUIRE_THAT(k.w, WithinRel(2.8403932633795264, 1e-12));
 
     // ...and again from the defining formulae, spelled out here so this test
     // does not merely re-assert a number copied out of the implementation.
@@ -299,10 +299,10 @@ TEST_CASE("compute_dis uses the energy it is given, not |p_e|", "[kin][dis][unit
     const V3 pe = from_sph(8.0, 20.0, 0.0);
     const pi0::DisKin k = pi0::kin::compute_dis(pe.x, pe.y, pe.z, 4.0, pi0::kBeamEnergyGeV);
 
-    CHECK_THAT(k.q2, WithinRel(5.0802936249950763, 1e-12));
-    CHECK_THAT(k.nu, WithinRel(6.53, 1e-12));
-    CHECK_THAT(k.xb, WithinRel(0.41458814616740869, 1e-12));
-    CHECK_THAT(k.w, WithinRel(2.8379381672243884, 1e-12));
+    CHECK_THAT(k.q2, WithinRel(5.085118215332204, 1e-12));
+    CHECK_THAT(k.nu, WithinRel(6.54, 1e-12));
+    CHECK_THAT(k.xb, WithinRel(0.41434733825515724, 1e-12));
+    CHECK_THAT(k.w, WithinRel(2.8403932633795264, 1e-12));
 }
 
 // ---------------------------------------------------------------------------

@@ -526,6 +526,8 @@ def extract_bin(
         reason, ok = NO_ABSCISSA, False
     elif box is not None:
         for name, val in absc.items():
+            if name not in box:
+                continue  # e.g. <xb> when Grid A is (Q2, nu): x_B has no box to check
             lo, hi = box[name]
             if not (lo <= val <= hi):
                 reason, ok = ABSCISSA_OUT_OF_BOX, False
@@ -580,13 +582,16 @@ def extract_all(
 
 
 def _box_of(binning, bin4d: int) -> dict[str, tuple[float, float]]:
-    """The ``(lo, hi)`` edges of a 4D bin on each of its four axes."""
+    """The ``(lo, hi)`` edges of a 4D bin on each of its four axes, keyed by axis name.
+
+    Grid A's second axis is ``xb`` or ``nu``; the key is whichever the grid file names.
+    """
     i_q2, i_xb, i_z, i_pt2 = binning.decode_4d(bin4d)
     q2, xb = binning.grid_a.axes
     z, pt2 = binning.grid_b.axes
     return {
         "q2": (float(q2.edges[i_q2]), float(q2.edges[i_q2 + 1])),
-        "xb": (float(xb.edges[i_xb]), float(xb.edges[i_xb + 1])),
+        xb.name: (float(xb.edges[i_xb]), float(xb.edges[i_xb + 1])),
         "z": (float(z.edges[i_z]), float(z.edges[i_z + 1])),
         "pt2": (float(pt2.edges[i_pt2]), float(pt2.edges[i_pt2 + 1])),
     }

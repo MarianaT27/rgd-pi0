@@ -158,16 +158,17 @@ TEST_CASE("Cuts::load parses config/cuts.json and yields the documented values",
     const pi0::Cuts& c = shipped_cuts();
 
     SECTION("beam") {
-        CHECK_THAT(c.beam.energy_gev, WithinAbs(10.53, 1e-12));
+        CHECK_THAT(c.beam.energy_gev, WithinAbs(10.54, 1e-12));
         CHECK(c.beam.polarity == "outbending");
     }
 
-    SECTION("the momentum cut is 2.0 GeV, and has always been 2.0") {
+    SECTION("the momentum cut is 1.8 GeV (common analysis note), and is not 0.8") {
         // THE HEADLINE TRAP. The old cutflow's label said 0.8 while the code
         // applied 2.0 (ElectronCutsService::MIN_ELECTRON_MOMENTUM). Any cutflow
         // table copied from the old logs inherits the lie. 0.8 is not a value
-        // this analysis has ever used for anything.
-        CHECK_THAT(c.electron.min_momentum_gev, WithinAbs(2.0, 1e-12));
+        // this analysis has ever used for anything. The value is now the RG-D
+        // common analysis note's p > 1.8 GeV.
+        CHECK_THAT(c.electron.min_momentum_gev, WithinAbs(1.8, 1e-12));
         CHECK(c.electron.min_momentum_gev != 0.8);
     }
 
@@ -175,9 +176,10 @@ TEST_CASE("Cuts::load parses config/cuts.json and yields the documented values",
         CHECK_THAT(c.electron.chi2pid_min, WithinAbs(-5.0, 1e-12));
         CHECK_THAT(c.electron.chi2pid_max, WithinAbs(5.0, 1e-12));
         CHECK_THAT(c.electron.sf_n_sigma, WithinAbs(3.5, 1e-12));
-        CHECK_THAT(c.electron.dc_edge_r1_cm, WithinAbs(1.68, 1e-12));
-        CHECK_THAT(c.electron.dc_edge_r2_cm, WithinAbs(2.0, 1e-12));
-        CHECK_THAT(c.electron.dc_edge_r3_cm, WithinAbs(8.75, 1e-12));
+        // DC edge cuts: the common analysis note, Table 3 (outbending).
+        CHECK_THAT(c.electron.dc_edge_r1_cm, WithinAbs(1.88, 1e-12));
+        CHECK_THAT(c.electron.dc_edge_r2_cm, WithinAbs(2.08, 1e-12));
+        CHECK_THAT(c.electron.dc_edge_r3_cm, WithinAbs(8.62, 1e-12));
         // |status| in [2000, 4000): inclusive lower, EXCLUSIVE upper.
         CHECK(c.electron.status_min == 2000);
         CHECK(c.electron.status_max == 4000);
@@ -915,12 +917,12 @@ TEST_CASE("pass_electron short-circuits: the FIRST failing stage is reported", "
 TEST_CASE("cutflow labels are derived from the config, and cannot go stale", "[electron][label]") {
     const pi0::Cuts& c = shipped_cuts();
 
-    SECTION("the momentum label says 2, and does NOT say 0.8") {
+    SECTION("the momentum label says 1.8, and does NOT say 0.8") {
         // THE REGRESSION TEST FOR THE HEADLINE BUG. The old label was the
         // literal string "Momentum > 0.8 GeV" beside code applying 2.0.
         const std::string label = sel::electron_cutflow_label(sel::electron_stage::kMomentum, c);
         INFO("label = " << label);
-        CHECK_THAT(label, ContainsSubstring("2"));
+        CHECK_THAT(label, ContainsSubstring("1.8"));
         CHECK_THAT(label, !ContainsSubstring("0.8"));
     }
 

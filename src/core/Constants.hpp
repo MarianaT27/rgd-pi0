@@ -24,7 +24,7 @@
 namespace pi0 {
 
 /// Nominal CLAS12 RG-D beam energy, GeV.
-inline constexpr double kBeamEnergyGeV = 10.53;
+inline constexpr double kBeamEnergyGeV = 10.54;
 
 // ---------------------------------------------------------------------------
 // Particle masses, GeV.
