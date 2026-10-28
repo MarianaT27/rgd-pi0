@@ -1,0 +1,36 @@
+{
+  "_comment": "Grid A for the CLAS6 COMPARISON binning: (Q2, nu) instead of (Q2, xB), per EVENT, HAND-CHOSEN edges (2026-10-28). Use it in place of grid_A_q2_xb.json (stageB_bin --grid-a, and --grid-a in the pi0.ratio/broadening/bsa/qa steps) to bin in the (Q2, nu) cells of Mineeva et al. (CLAS EG2 pi0), arXiv:2406.04513 / analysis note v16 Table 3.9: Q2 = 1.0, 1.33, 1.76, 4.1 GeV2 and nu = 2.2, 3.2, 3.73, 4.25 GeV. Extra bins beyond their 5 GeV-beam range: Q2 4.1-11 and nu 4.25-5.25, 5.25-6.25, 6.25-7.25, 7.25-9.0 (y < 0.85 at 10.54 GeV gives nu < 8.96). With this grid the columns named i_xb / n_xb in the outputs index NU bins; xb_mean is still the mean x_B of the bin.",
+  "_grid": "A",
+  "_schema_version": "1.0",
+  "axes": [
+    {
+      "name": "q2",
+      "n_bins": 4,
+      "edges": [
+        1.0,
+        1.33,
+        1.76,
+        4.1,
+        11.0
+      ]
+    },
+    {
+      "name": "nu",
+      "n_bins": 7,
+      "edges": [
+        2.2,
+        3.2,
+        3.73,
+        4.25,
+        5.25,
+        6.25,
+        7.25,
+        9.0
+      ]
+    }
+  ],
+  "provenance": {
+    "source": "manual: Q2 and nu edges of Mineeva et al. (CLAS EG2 pi0), arXiv:2406.04513 and analysis note v16 Table 3.9, plus extra bins above their range",
+    "n_events": 0
+  }
+}

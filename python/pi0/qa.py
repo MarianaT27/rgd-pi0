@@ -312,6 +312,10 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="QA diagnostics for the pi0 extraction stage.")
     p.add_argument("--file", required=True, type=Path, help="Stage B file")
     p.add_argument("--config", required=True, type=Path, help="config/ directory")
+    p.add_argument("--grid-a", type=Path, default=None,
+                   help="Grid A file, if not config/binning/grid_A_q2_xb.json (same as stageB_bin --grid-a)")
+    p.add_argument("--grid-b", type=Path, default=None,
+                   help="Grid B file, if not config/binning/grid_B_z_pt2.json (same as stageB_bin --grid-b)")
     p.add_argument("--outdir", required=True, type=Path, help="directory for the figures")
     p.add_argument("--allow-unpublishable", action="store_true",
                    help="proceed despite fatal provenance blockers. Figures get a watermark.")
@@ -323,7 +327,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
 
-    cfg = load_config(args.config)
+    cfg = load_config(args.config, grid_a=args.grid_a, grid_b=args.grid_b)
     data = io.load(args.file, cfg, allow_unpublishable=args.allow_unpublishable)
     args.outdir.mkdir(parents=True, exist_ok=True)
 

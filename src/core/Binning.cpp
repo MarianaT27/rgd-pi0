@@ -177,7 +177,7 @@ Grid1D read_axis(const GridReader& r, const json& node, const std::string& displ
 /// the wrong name -- and would still pass every geometry check, because the two
 /// axes have the same shape.
 Grid2D load_grid(const std::string& path, const std::string& grid_label,
-                 const std::string& expect_x, const std::string& expect_y) {
+                 const std::string& expect_x, const std::vector<std::string>& allowed_y) {
     std::ifstream in(path);
     if (!in) {
         throw std::runtime_error("Binning::load: grid " + grid_label + ": cannot open '" + path +
@@ -232,7 +232,11 @@ Grid2D load_grid(const std::string& path, const std::string& grid_label,
         }
     };
     require_named(g.x, expect_x, "axes[0]");
-    require_named(g.y, expect_y, "axes[1]");
+    // Grid A's second axis may be x_B (the analysis binning) or nu (a comparison
+    // binning in (Q2, nu), e.g. the CLAS6 pi0 bins). Grid B allows only pt2.
+    if (std::find(allowed_y.begin(), allowed_y.end(), g.y.name) == allowed_y.end()) {
+        require_named(g.y, allowed_y.front(), "axes[1]");
+    }
 
     // /provenance is required but not stored: it exists so that a grid file can
     // always say where its edges came from, and the placeholders say
@@ -387,8 +391,8 @@ std::string Binning::provenance_hash() const {
 
 Binning Binning::load(const std::string& grid_a_json, const std::string& grid_b_json) {
     Binning b;
-    b.A = load_grid(grid_a_json, "A", "q2", "xb");
-    b.B = load_grid(grid_b_json, "B", "z", "pt2");
+    b.A = load_grid(grid_a_json, "A", "q2", {"xb", "nu"});
+    b.B = load_grid(grid_b_json, "B", "z", {"pt2"});
     return b;
 }
 

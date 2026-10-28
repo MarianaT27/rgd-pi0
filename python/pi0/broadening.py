@@ -249,11 +249,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--target", required=True, type=Path)
     p.add_argument("--ld2", required=True, type=Path)
     p.add_argument("--config", required=True, type=Path)
+    p.add_argument("--grid-a", type=Path, default=None,
+                   help="Grid A file, if not config/binning/grid_A_q2_xb.json (same as stageB_bin --grid-a)")
+    p.add_argument("--grid-b", type=Path, default=None,
+                   help="Grid B file, if not config/binning/grid_B_z_pt2.json (same as stageB_bin --grid-b)")
     p.add_argument("--out", required=True, type=Path)
     p.add_argument("--allow-unpublishable", action="store_true")
     args = p.parse_args(argv)
 
-    cfg = load_config(args.config)
+    cfg = load_config(args.config, grid_a=args.grid_a, grid_b=args.grid_b)
     da = io.load(args.target, cfg, allow_unpublishable=args.allow_unpublishable)
     dd = io.load(args.ld2, cfg, allow_unpublishable=args.allow_unpublishable)
     table, _ = delta_pt2(moments_3d(da, cfg), moments_3d(dd, cfg), cfg)

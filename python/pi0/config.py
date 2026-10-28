@@ -180,7 +180,10 @@ class Grid2D:
     @property
     def is_placeholder(self) -> bool:
         """bool : True if these edges were never fitted to data."""
-        return self.source.strip().lower() == "placeholder" or self.n_events == 0
+        src = self.source.strip().lower()
+        if src.startswith("manual"):
+            return False  # hand-chosen on purpose (e.g. the CLAS6 comparison edges), not a placeholder
+        return src == "placeholder" or self.n_events == 0
 
     @property
     def n(self) -> int:
@@ -188,8 +191,12 @@ class Grid2D:
         return self.axes[0].n * self.axes[1].n
 
 
-def _load_grid(path: Path, expect_axes: Sequence[str]) -> Grid2D:
-    """Read a grid JSON file, validating axis names and edge monotonicity."""
+def _load_grid(path: Path, expect_axes: Sequence[str | tuple[str, ...]]) -> Grid2D:
+    """Read a grid JSON file, validating axis names and edge monotonicity.
+
+    Each entry of ``expect_axes`` is the required axis name, or a tuple of the
+    names allowed in that position (Grid A's second axis may be ``xb`` or ``nu``).
+    """
     doc = json.loads(path.read_text())
     axes_doc = require(doc, "axes")
     if len(axes_doc) != 2:
@@ -197,8 +204,9 @@ def _load_grid(path: Path, expect_axes: Sequence[str]) -> Grid2D:
     axes: list[Grid1D] = []
     for ax_doc, want in zip(axes_doc, expect_axes):
         name = require(ax_doc, "name", expect=str)
-        if name != want:
-            raise ConfigError(f"{path}: axis order is {name!r}, expected {want!r}")
+        allowed = want if isinstance(want, tuple) else (want,)
+        if name not in allowed:
+            raise ConfigError(f"{path}: axis order is {name!r}, expected one of {allowed!r}")
         edges = np.asarray(require(ax_doc, "edges", expect=list), dtype=np.float64)
         if edges.ndim != 1 or len(edges) < 2 or not np.all(np.diff(edges) > 0):
             raise ConfigError(f"{path}: axis {name!r} edges are not strictly increasing: {edges}")
@@ -460,13 +468,19 @@ class Config:
     broadening: BroadeningCuts
 
 
-def load_config(config_dir: str | Path) -> Config:
+def load_config(config_dir: str | Path, grid_a: str | Path | None = None,
+                grid_b: str | Path | None = None) -> Config:
     """Load ``cuts.json`` and the two grid JSONs, validating them against each other.
 
     Parameters
     ----------
     config_dir : str or pathlib.Path
         The repository's ``config/`` directory.
+    grid_a, grid_b : str or pathlib.Path, optional
+        Grid files to use instead of ``config/binning/grid_A_q2_xb.json`` and
+        ``config/binning/grid_B_z_pt2.json`` (the same files given to stageB_bin's
+        --grid-a / --grid-b). An overridden grid is not checked against the shape
+        declared in ``cuts.json``, which describes the default grids only.
 
     Returns
     -------
@@ -486,18 +500,20 @@ def load_config(config_dir: str | Path) -> Config:
         raise ConfigError(f"no cuts.json at {cuts_path}")
     cuts = json.loads(cuts_path.read_text())
 
-    grid_a = _load_grid(config_dir / "binning" / "grid_A_q2_xb.json", ("q2", "xb"))
-    grid_b = _load_grid(config_dir / "binning" / "grid_B_z_pt2.json", ("z", "pt2"))
-    binning = Binning(grid_a=grid_a, grid_b=grid_b)
+    path_a = Path(grid_a) if grid_a is not None else config_dir / "binning" / "grid_A_q2_xb.json"
+    path_b = Path(grid_b) if grid_b is not None else config_dir / "binning" / "grid_B_z_pt2.json"
+    grid_a_doc = _load_grid(path_a, ("q2", ("xb", "nu")))
+    grid_b_doc = _load_grid(path_b, ("z", "pt2"))
+    binning = Binning(grid_a=grid_a_doc, grid_b=grid_b_doc)
 
     # cuts.json declares the grid shape independently of the grid files. If the
     # two ever disagree, one of them is stale -- refuse rather than pick one.
-    for key, got in (
-        ("binning/grid_a/n_q2", binning.n_q2),
-        ("binning/grid_a/n_xb", binning.n_xb),
-        ("binning/grid_b/n_z", binning.n_z),
-        ("binning/grid_b/n_pt2", binning.n_pt2),
-    ):
+    shape_checks = []
+    if grid_a is None:
+        shape_checks += [("binning/grid_a/n_q2", binning.n_q2), ("binning/grid_a/n_xb", binning.n_xb)]
+    if grid_b is None:
+        shape_checks += [("binning/grid_b/n_z", binning.n_z), ("binning/grid_b/n_pt2", binning.n_pt2)]
+    for key, got in shape_checks:
         want = int(require(cuts, key))
         if want != got:
             raise ConfigError(

@@ -105,9 +105,9 @@
       "n_xb": 7
     },
     "grid_b": {
-      "_comment": "Grid B = (z, p_T^2), per PI0. 5 x 5 = 25 cells. INDEPENDENT of the Grid A cell -- the 4D bin is the product A x B = 1400, not a nested tree. This is the deliberate simplification recorded in the note (sec:binning-future): it buys global quotable edges and reproducibility, and it sacrifices the kd-tree's ability to let the p_T^2 edges follow z.",
-      "n_z": 5,
-      "n_pt2": 5
+      "_comment": "Grid B = (z, p_T^2), per PI0. 9 x 7 = 63 cells, hand-chosen edges (see config/binning/grid_B_z_pt2.json). INDEPENDENT of the Grid A cell -- the 4D bin is the product A x B = 56 x 63 = 3528, not a nested tree. This is the deliberate simplification recorded in the note (sec:binning-future): it buys global quotable edges and reproducibility, and it sacrifices the kd-tree's ability to let the p_T^2 edges follow z.",
+      "n_z": 9,
+      "n_pt2": 7
     },
     "_equal_statistics_is_marginal_comment": "CRITICAL, AND EASY TO MISREAD. 'Equal statistics' here means each axis is cut at quantiles of its OWN marginal distribution. It does NOT mean the 56 cells of Grid A hold equal counts -- Q^2 and x_B are strongly correlated, so the product of two equal-count marginals is very far from an equal-count 2D grid, and the low-x_B/high-Q^2 corner is nearly empty. Each Q^2 ROW holds ~1/8 of the sample and each x_B COLUMN ~1/7; individual cells do not. The kd-tree this replaces DID give equal-occupancy leaves, and that property is genuinely lost. make_grid prints the 2D occupancy table precisely so that nobody has to take this comment's word for it.",
     "_cap_comment": "No cap key here, deliberately. An equal-statistics grid still has an outermost bin running to the kinematic limit (note sec:binning-caveat), and make_grid offers --cap-z / --cap-pt2 to clamp the top edge and discard the overflow. That is an OPT-IN STUDY KNOB, not a production default: with count-weighted abscissae -- which Stage B accumulates per (4D bin, m_gg bin) from its first line -- the wide outer bin is honestly POSITIONED even though it is coarse, so capping trades real pi0 away for a cosmetic gain. If a cap is ever adopted for production it belongs here as a key with a physics justification; until then it stays on the command line and is recorded in the emitted grid JSON's provenance along with how many pi0 it threw away."

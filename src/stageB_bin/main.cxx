@@ -1078,10 +1078,15 @@ int main(int argc, char* argv[]) {
             // SetEntriesRange -- so the partitions tile [0, total_entries) exactly.
             reader.SetEntriesRange(static_cast<Long64_t>(begin), static_cast<Long64_t>(end));
 
+            // Grid A's second axis is x_B (default) or nu (comparison binning, e.g. the
+            // CLAS6 pi0 (Q2, nu) bins). Binning::load accepts only those two names.
+            const bool a_is_nu = (binning.A.y.name == "nu");
+
             while (reader.Next()) {
                 progress.add();
 
                 const double q2 = *r_q2, xb = *r_xb, nu = *r_nu, w = *r_w, y = *r_y;
+                const double a_y = a_is_nu ? nu : xb;  // Grid A second-axis value
                 const double ex = *r_ex, ey = *r_ey, ez = *r_ez, ee = *r_ee;
                 const int helicity = *r_hel;
                 // Copy the four photon columns into RVecs so build_photons() -- THE
@@ -1106,7 +1111,7 @@ int main(int argc, char* argv[]) {
                 // way to keep them from being confused. If anyone ever needs the
                 // per-candidate count, it is sum(spectra.n_same) over the A cell,
                 // which is self-evidently a pi0 count and not a DIS count.
-                const int cell_a = binning.A.find(q2, xb);
+                const int cell_a = binning.A.find(q2, a_y);
                 if (cell_a >= 0) {
                     ++out.n_dis[static_cast<std::size_t>(cell_a)];
                 } else {
@@ -1139,7 +1144,7 @@ int main(int argc, char* argv[]) {
 
                     const int imgg = mgg_axis.find(p.mgg);
                     if (imgg < 0) continue;
-                    const int bin4d = binning.find_4d(q2, xb, s.z, s.pt2);
+                    const int bin4d = binning.find_4d(q2, a_y, s.z, s.pt2);
                     if (bin4d < 0) continue;
                     ++out.n_same_binned;
 
@@ -1164,7 +1169,7 @@ int main(int argc, char* argv[]) {
                     // bin4d / n_pt2: they agree whenever both are in range, but
                     // deriving one from the other is a coincidence to depend on
                     // (core/Binning.hpp says so explicitly).
-                    const int bin3d = binning.find_3d(q2, xb, s.z);
+                    const int bin3d = binning.find_3d(q2, a_y, s.z);
                     if (bin3d >= 0) {
                         Ptb3dPartial& t = out.ptb[static_cast<std::size_t>(bin3d) * static_cast<std::size_t>(n_mgg) +
                                                   static_cast<std::size_t>(imgg)];
@@ -1246,7 +1251,7 @@ int main(int argc, char* argv[]) {
 
                         const int imgg = mgg_axis.find(mp->mgg);
                         if (imgg < 0) continue;
-                        const int bin4d = binning.find_4d(q2, xb, s.z, s.pt2);
+                        const int bin4d = binning.find_4d(q2, a_y, s.z, s.pt2);
                         if (bin4d < 0) continue;
                         ++out.n_mixed_binned;
 
@@ -1705,7 +1710,7 @@ int main(int argc, char* argv[]) {
         // that made it.
         prov.add("binning.provenance_hash", binning.provenance_hash());
         prov.add("binning.shape", std::to_string(binning.A.x.nbins()) + " x " + std::to_string(binning.A.y.nbins()) +
-                                      " (Grid A: Q2 x xB) * " + std::to_string(binning.B.x.nbins()) + " x " +
+                                      " (Grid A: q2 x " + binning.A.y.name + ") * " + std::to_string(binning.B.x.nbins()) + " x " +
                                       std::to_string(binning.B.y.nbins()) + " (Grid B: z x pT2) = " +
                                       std::to_string(n4d) + " 4D bins; " + std::to_string(n3d) + " 3D bins");
         prov.add("binning.index_formula_4d",

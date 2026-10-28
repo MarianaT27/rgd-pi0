@@ -158,11 +158,11 @@ TEST_CASE("Grid1D::find puts a value ON THE TOP EDGE in the LAST bin", "[binning
     CHECK(g.find(std::nextafter(4.0, 0.0)) == 2);
 
     // Same rule on the shipped pT2 axis, which is the axis the bug actually
-    // bit. Its top edge is 1.5 (config/binning/grid_B_z_pt2.json).
+    // bit. Its top edge is 10.0 (config/binning/grid_B_z_pt2.json).
     const pi0::Grid1D& pt2 = shipped_binning().B.y;
     REQUIRE(pt2.name == "pt2");
-    CHECK(pt2.find(1.5) == pt2.nbins() - 1);
-    CHECK(pt2.find(1.5) == 4);
+    CHECK(pt2.find(10.0) == pt2.nbins() - 1);
+    CHECK(pt2.find(10.0) == 6);
 }
 
 TEST_CASE("Grid1D::find returns -1 outside the axis", "[binning]") {
@@ -238,39 +238,28 @@ TEST_CASE("the shipped grids have the geometry the note specifies", "[binning]")
     CHECK(b.B.x.name == "z");
     CHECK(b.B.y.name == "pt2");
 
-    // Grid A = 8 x 7 = 56, Grid B = 5 x 5 = 25, 4D = 1400, 3D = 280.
+    // Grid A = 8 x 7 = 56, Grid B = 9 x 7 = 63, 4D = 3528, 3D = 504.
     CHECK(b.A.x.nbins() == 8);
     CHECK(b.A.y.nbins() == 7);
     CHECK(b.A.ncells() == 56);
-    CHECK(b.B.x.nbins() == 5);
-    CHECK(b.B.y.nbins() == 5);
-    CHECK(b.B.ncells() == 25);
-    CHECK(b.n4d() == 1400);
-    CHECK(b.n3d() == 280);
+    CHECK(b.B.x.nbins() == 9);
+    CHECK(b.B.y.nbins() == 7);
+    CHECK(b.B.ncells() == 63);
+    CHECK(b.n4d() == 3528);
+    CHECK(b.n3d() == 504);
 
     // Edges, transcribed from the JSON (the source of truth). If these ever
     // disagree with it, IT WINS and this test is what changes -- but a
     // disagreement means someone moved a bin edge, and that must be a
     // deliberate act, which is exactly why these assertions force it.
-    CHECK(b.A.x.edges == std::vector<double>{1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 7.0, 11.0});
-    CHECK(b.A.y.edges == std::vector<double>{0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.7});
-    CHECK(b.B.x.edges == std::vector<double>{0.0, 0.2, 0.4, 0.6, 0.8, 1.0});
-    CHECK(b.B.y.edges == std::vector<double>{0.0, 0.1, 0.2, 0.4, 0.7, 1.5});
+    // Grid A: make_grid equal-statistics edges. Grid B: hand-chosen, the CLAS6 pi0
+    // edges (Mineeva et al., arXiv:2406.04513) plus bins outside their region.
+    CHECK(b.A.x.edges == std::vector<double>{1.000000001553369, 1.1036395052848946, 1.2274615100761013, 1.3796989494979235, 1.5737701447250996, 1.8357110485458725, 2.225254915566152, 2.9333272227860725, 10.383576123259907});
+    CHECK(b.A.y.edges == std::vector<double>{0.06104468350371436, 0.09485387000230364, 0.11761977644765222, 0.14212794099210188, 0.1715709978794819, 0.21078880298901825, 0.2730911087005842, 0.7685063303656742});
+    CHECK(b.B.x.edges == std::vector<double>{0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 1.0});
+    CHECK(b.B.y.edges == std::vector<double>{0.0, 0.1, 0.25, 0.4, 0.55, 0.75, 1.5, 10.0});
 }
 
-TEST_CASE("the shipped grids are still PLACEHOLDERS", "[binning]") {
-    // This test is a TRIPWIRE, not a specification. It fails the day someone
-    // replaces the placeholders with make_grid output -- at which point delete
-    // it, and delete the placeholder warnings in the JSON with it. Until then
-    // it stops the placeholder status from being forgotten, which is exactly
-    // how the superseded analysis ended up quoting numbers nobody could source.
-    for (const char* path : {grid_a_path(), grid_b_path()}) {
-        const nlohmann::json doc = parsed(path);
-        INFO("grid file: " << path);
-        CHECK(doc.at("provenance").at("source").get<std::string>() == "placeholder");
-        CHECK(doc.at("provenance").at("n_events").get<long long>() == 0);
-    }
-}
 
 // ===========================================================================
 // find_4d / find_3d -- composition and the flat index
@@ -279,9 +268,9 @@ TEST_CASE("the shipped grids are still PLACEHOLDERS", "[binning]") {
 TEST_CASE("Binning::find_4d composes A and B with the B cell fast", "[binning]") {
     const pi0::Binning& b = shipped_binning();
 
-    // Q2 = 1.2 -> i_q2 = 0; xB = 0.12 -> i_xb = 0; z = 0.1 -> i_z = 0;
+    // Q2 = 1.05 -> i_q2 = 0; xB = 0.07 -> i_xb = 0; z = 0.05 -> i_z = 0;
     // pT2 = 0.05 -> i_pt2 = 0. The very first bin.
-    CHECK(b.find_4d(1.2, 0.12, 0.1, 0.05) == 0);
+    CHECK(b.find_4d(1.05, 0.07, 0.05, 0.05) == 0);
 
     // Formula re-derived locally from the per-axis indices, exactly as the
     // downstream Python must:
@@ -291,55 +280,53 @@ TEST_CASE("Binning::find_4d composes A and B with the B cell fast", "[binning]")
     const int n_pt2 = b.B.y.nbins();
 
     // Per-axis indices, read off the edge arrays in config/binning/*.json:
-    //   Q2  = 3.5  -> i_q2  = 4, box [3.0, 4.0)
-    //   xB  = 0.27 -> i_xb  = 3, box [0.25, 0.3)   <- edges are 0.1, 0.15, 0.2,
-    //                                                 0.25, ... so [0.25,0.3)
-    //                                                 is the FOURTH bin, index 3
-    //   z   = 0.45 -> i_z   = 2, box [0.4, 0.6)
-    //   pT2 = 0.3  -> i_pt2 = 2, box [0.2, 0.4)
-    const int expect = ((4 * n_xb) + 3) * (n_z * n_pt2) + (2 * n_pt2) + 2;
-    CHECK(expect == 787);  // spelled out, so the formula and the arithmetic are both pinned
-    CHECK(b.find_4d(3.5, 0.27, 0.45, 0.3) == expect);
+    //   Q2  = 2.5  -> i_q2  = 6, box [2.225, 2.933)
+    //   xB  = 0.25 -> i_xb  = 5, box [0.2108, 0.2731)
+    //   z   = 0.45 -> i_z   = 4, box [0.4, 0.5)
+    //   pT2 = 0.3  -> i_pt2 = 2, box [0.25, 0.4)
+    const int expect = ((6 * n_xb) + 5) * (n_z * n_pt2) + (4 * n_pt2) + 2;
+    CHECK(expect == 2991);  // spelled out, so the formula and the arithmetic are both pinned
+    CHECK(b.find_4d(2.5, 0.25, 0.45, 0.3) == expect);
 
     // The composition is exactly A's cell times B's cell count plus B's cell --
     // asserted against the grids themselves, not just against the literal.
-    CHECK(b.find_4d(3.5, 0.27, 0.45, 0.3) ==
-          b.A.find(3.5, 0.27) * b.B.ncells() + b.B.find(0.45, 0.3));
+    CHECK(b.find_4d(2.5, 0.25, 0.45, 0.3) ==
+          b.A.find(2.5, 0.25) * b.B.ncells() + b.B.find(0.45, 0.3));
 
     // The last bin: everything on its top edge.
-    CHECK(b.find_4d(11.0, 0.7, 1.0, 1.5) == b.n4d() - 1);
+    CHECK(b.find_4d(b.A.x.edges.back(), b.A.y.edges.back(), 1.0, 10.0) == b.n4d() - 1);
 
     // Every in-range bin index is in [0, n4d()).
-    CHECK(b.find_4d(3.5, 0.27, 0.45, 0.3) >= 0);
-    CHECK(b.find_4d(3.5, 0.27, 0.45, 0.3) < b.n4d());
+    CHECK(b.find_4d(2.5, 0.25, 0.45, 0.3) >= 0);
+    CHECK(b.find_4d(2.5, 0.25, 0.45, 0.3) < b.n4d());
 }
 
 TEST_CASE("Binning::find_4d returns -1 if EITHER grid misses", "[binning]") {
     const pi0::Binning& b = shipped_binning();
 
     // A good 4-tuple, so that each case below spoils exactly one coordinate.
-    REQUIRE(b.find_4d(3.5, 0.27, 0.45, 0.3) >= 0);
+    REQUIRE(b.find_4d(2.5, 0.25, 0.45, 0.3) >= 0);
 
-    CHECK(b.find_4d(0.5, 0.27, 0.45, 0.3) == -1);   // Q2 below Grid A
+    CHECK(b.find_4d(0.5, 0.25, 0.45, 0.3) == -1);   // Q2 below Grid A
     CHECK(b.find_4d(50.0, 0.27, 0.45, 0.3) == -1);  // Q2 above Grid A
     CHECK(b.find_4d(3.5, 0.05, 0.45, 0.3) == -1);   // xB below Grid A
     CHECK(b.find_4d(3.5, 0.95, 0.45, 0.3) == -1);   // xB above Grid A
-    CHECK(b.find_4d(3.5, 0.27, -0.1, 0.3) == -1);   // z below Grid B
-    CHECK(b.find_4d(3.5, 0.27, 1.5, 0.3) == -1);    // z above Grid B
-    CHECK(b.find_4d(3.5, 0.27, 0.45, -0.1) == -1);  // pT2 below Grid B
-    CHECK(b.find_4d(3.5, 0.27, 0.45, 9.9) == -1);   // pT2 above Grid B
+    CHECK(b.find_4d(2.5, 0.25, -0.1, 0.3) == -1);   // z below Grid B
+    CHECK(b.find_4d(2.5, 0.25, 1.5, 0.3) == -1);    // z above Grid B
+    CHECK(b.find_4d(2.5, 0.25, 0.45, -0.1) == -1);  // pT2 below Grid B
+    CHECK(b.find_4d(2.5, 0.25, 0.45, 10.5) == -1);   // pT2 above Grid B
 
     // A miss in A alone is enough even when B hits, and vice versa: there is no
     // partial 4D bin.
-    REQUIRE(b.A.find(0.5, 0.27) == -1);
+    REQUIRE(b.A.find(0.5, 0.25) == -1);
     REQUIRE(b.B.find(0.45, 0.3) >= 0);
-    CHECK(b.find_4d(0.5, 0.27, 0.45, 0.3) == -1);
+    CHECK(b.find_4d(0.5, 0.25, 0.45, 0.3) == -1);
 
-    REQUIRE(b.A.find(3.5, 0.27) >= 0);
-    REQUIRE(b.B.find(0.45, 9.9) == -1);
-    CHECK(b.find_4d(3.5, 0.27, 0.45, 9.9) == -1);
+    REQUIRE(b.A.find(2.5, 0.25) >= 0);
+    REQUIRE(b.B.find(0.45, 10.5) == -1);
+    CHECK(b.find_4d(2.5, 0.25, 0.45, 10.5) == -1);
 
-    CHECK(b.find_4d(std::numeric_limits<double>::quiet_NaN(), 0.27, 0.45, 0.3) == -1);
+    CHECK(b.find_4d(std::numeric_limits<double>::quiet_NaN(), 0.25, 0.45, 0.3) == -1);
 }
 
 TEST_CASE("the 4D flat index round-trips over EVERY bin", "[binning]") {
@@ -415,22 +402,22 @@ TEST_CASE("Binning::find_3d is the A cell times the z bin", "[binning]") {
     const int n_xb = b.A.y.nbins();
     const int n_z = b.B.x.nbins();
 
-    CHECK(b.find_3d(1.2, 0.12, 0.1) == 0);
+    CHECK(b.find_3d(1.05, 0.07, 0.05) == 0);
 
     // Formula re-derived locally: bin3d = ((i_q2 * n_xb) + i_xb) * n_z + i_z.
-    // Q2 = 3.5 -> i_q2 = 4; xB = 0.27 -> i_xb = 3 (box [0.25, 0.3));
-    // z = 0.45 -> i_z = 2.
-    CHECK(((4 * n_xb) + 3) * n_z + 2 == 157);  // pin the arithmetic too
-    CHECK(b.find_3d(3.5, 0.27, 0.45) == ((4 * n_xb) + 3) * n_z + 2);
-    CHECK(b.find_3d(11.0, 0.7, 1.0) == b.n3d() - 1);
+    // Q2 = 2.5 -> i_q2 = 6; xB = 0.25 -> i_xb = 5 (box [0.2108, 0.2731));
+    // z = 0.45 -> i_z = 4.
+    CHECK(((6 * n_xb) + 5) * n_z + 4 == 427);  // pin the arithmetic too
+    CHECK(b.find_3d(2.5, 0.25, 0.45) == ((6 * n_xb) + 5) * n_z + 4);
+    CHECK(b.find_3d(b.A.x.edges.back(), b.A.y.edges.back(), 1.0) == b.n3d() - 1);
 
     // -1 if the A cell or the z bin misses. pT2 is deliberately not an
     // argument: it is the OBSERVABLE of the pT-broadening measurement, not a
     // binning dimension, so a pT2 outside Grid B must not remove an event from
     // its 3D bin.
-    CHECK(b.find_3d(0.5, 0.27, 0.45) == -1);
+    CHECK(b.find_3d(0.5, 0.25, 0.45) == -1);
     CHECK(b.find_3d(3.5, 0.95, 0.45) == -1);
-    CHECK(b.find_3d(3.5, 0.27, 1.5) == -1);
+    CHECK(b.find_3d(2.5, 0.25, 1.5) == -1);
 
     // The 3D round-trip decodes with the header's decoder.
     for (int i_q2 = 0; i_q2 < b.A.x.nbins(); ++i_q2) {
@@ -458,7 +445,7 @@ TEST_CASE("find_3d is not derived from find_4d", "[binning]") {
     const int n_pt2 = b.B.y.nbins();
 
     // They agree whenever both are in range...
-    CHECK(b.find_3d(3.5, 0.27, 0.45) == b.find_4d(3.5, 0.27, 0.45, 0.3) / n_pt2);
+    CHECK(b.find_3d(2.5, 0.25, 0.45) == b.find_4d(2.5, 0.25, 0.45, 0.3) / n_pt2);
 
     // ...but the agreement is a coincidence of the index layout, not a
     // contract, and it breaks exactly where it matters: a pT2 outside Grid B
@@ -466,8 +453,8 @@ TEST_CASE("find_3d is not derived from find_4d", "[binning]") {
     // pT-broadening measurement's observable. A caller who computes bin3d as
     // bin4d / n_pt2 silently drops the high-pT2 tail -- which is the tail the
     // measurement is about.
-    REQUIRE(b.find_4d(3.5, 0.27, 0.45, 9.9) == -1);
-    CHECK(b.find_3d(3.5, 0.27, 0.45) >= 0);
+    REQUIRE(b.find_4d(2.5, 0.25, 0.45, 10.5) == -1);
+    CHECK(b.find_3d(2.5, 0.25, 0.45) >= 0);
 }
 
 // ===========================================================================
@@ -594,7 +581,7 @@ TEST_CASE("Binning::load throws on NON-MONOTONIC edges", "[binning]") {
         // caller following the header had no type to catch and the process
         // would die unhandled while trying to report a bad grid.
         std::string raw = parsed(grid_a_path()).dump(2);
-        const std::string needle = "0.25,";
+        const std::string needle = "1.1036395052848946,";  // a Grid A Q2 edge
         const std::size_t at = raw.find(needle);
         REQUIRE(at != std::string::npos);
         raw.replace(at, needle.size() - 1, "1e999");
@@ -686,6 +673,25 @@ TEST_CASE("Binning::load throws on a malformed document", "[binning]") {
         // The same guard catches the obvious argument-order slip.
         CHECK_THROWS_AS(pi0::Binning::load(grid_b_path(), grid_a_path()), std::runtime_error);
     }
+}
+
+TEST_CASE("Grid A's second axis may be xb or nu, and nothing else", "[binning]") {
+    // nu is allowed for the (Q2, nu) comparison binning (config/binning/grid_A_q2_nu.json).
+    nlohmann::json doc = parsed(grid_a_path());
+    doc["axes"][1]["name"] = "nu";
+    const TempGrid t_nu(doc, "nu_axis");
+    const pi0::Binning b = pi0::Binning::load(t_nu.path, grid_b_path());
+    CHECK(b.A.y.name == "nu");
+
+    doc["axes"][1]["name"] = "w";
+    const TempGrid t_w(doc, "w_axis");
+    CHECK_THROWS_WITH(pi0::Binning::load(t_w.path, grid_b_path()), ContainsSubstring("must be 'xb'"));
+
+    // nu is NOT accepted as Grid B's second axis.
+    nlohmann::json docb = parsed(grid_b_path());
+    docb["axes"][1]["name"] = "nu";
+    const TempGrid t_b(docb, "b_nu");
+    CHECK_THROWS_WITH(pi0::Binning::load(grid_a_path(), t_b.path), ContainsSubstring("must be 'pt2'"));
 }
 
 // ===========================================================================
