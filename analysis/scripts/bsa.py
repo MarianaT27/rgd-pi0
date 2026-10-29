@@ -40,10 +40,11 @@ SAMPLES = {
     "full_z10_v2": {"dir": "analysis/full_z10_v2", "results": "results_full", "bsa": "analysis/full_z10_v2/results_full/bsa_{t}.csv", "label": "full sample, 10 z bins, pool from xB 0.06"},
     "full":  {"dir": "analysis/full",  "results": "results_full", "bsa": "analysis/full/results_full/bsa_{t}.csv",
               "label": "full sample"},
+    "binning_v2": {"dir": "analysis/binning_v2", "results": "results_full", "bsa": "analysis/binning_v2/results_full/bsa_{t}.csv", "label": "full sample, binning v2"},
 }
 TARGETS = ["LD2", "CxC", "Cu", "Sn"]
 LABELS = {"LD2": "D", "CxC": "C", "Cu": "Cu", "Sn": "Sn"}
-COLORS = {"LD2": "black", "CxC": "tab:blue", "Cu": "tab:orange", "Sn": "tab:red"}
+COLORS = {"LD2": "black", "CxC": "#1f77b4", "Cu": "#d62728", "Sn": "#2ca02c"}
 
 if len(sys.argv) != 2 or sys.argv[1] not in SAMPLES:
     sys.exit("usage: python3 analysis/scripts/bsa.py <diag3|full>")

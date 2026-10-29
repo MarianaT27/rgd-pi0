@@ -44,7 +44,7 @@ from pi0.extract import fit_core, subtract  # noqa: E402
 
 TARGETS = ["LD2", "CxC", "Cu", "Sn"]
 LABELS = {"LD2": r"LD$_2$", "CxC": "C", "Cu": "Cu", "Sn": "Sn"}
-COLORS = {"LD2": "black", "CxC": "tab:blue", "Cu": "tab:orange", "Sn": "tab:green"}
+COLORS = {"LD2": "black", "CxC": "#1f77b4", "Cu": "#d62728", "Sn": "#2ca02c"}
 N_XF, XF_LO, XF_HI = 90, -3.0, 1.5   # must match stageB_bin (provenance xf_axis)
 N_ZF = 50                            # fine z axis of tree xf_z, over [0, 1]
 

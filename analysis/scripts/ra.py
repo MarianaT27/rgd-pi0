@@ -34,10 +34,12 @@ SAMPLES = {
     "full_z10": {"dir": "analysis/full_z10", "results": "results_full", "label": "full sample, 10 z bins"},
     "full_z10_v2": {"dir": "analysis/full_z10_v2", "results": "results_full", "label": "full sample, 10 z bins, pool from xB 0.06"},
     "full":  {"dir": "analysis/full",  "results": "results_full", "label": "full sample"},
+    "ndis":  {"dir": "analysis/ndis",  "results": "results_full", "label": "full sample, inclusive N_DIS"},
+    "binning_v2": {"dir": "analysis/binning_v2", "results": "results_full", "label": "full sample, binning v2"},
 }
 TARGETS = ["CxC", "Cu", "Sn"]
 LABELS = {"CxC": "C", "Cu": "Cu", "Sn": "Sn"}
-COLORS = {"CxC": "tab:blue", "Cu": "tab:orange", "Sn": "tab:red"}
+COLORS = {"CxC": "#1f77b4", "Cu": "#d62728", "Sn": "#2ca02c"}
 M_P = 0.938272
 
 if len(sys.argv) != 2 or sys.argv[1] not in SAMPLES:
