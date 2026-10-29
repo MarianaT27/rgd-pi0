@@ -26,7 +26,7 @@ from pathlib import Path
 import numpy as np
 
 TARGETS = [("LD2", "LD2"), ("CxC", "C×C"), ("Cu", "Cu"), ("Sn", "Sn")]
-COLORS = {"LD2": "#1f77b4", "CxC": "#17a2b8", "Cu": "#d62728", "Sn": "#2ca02c"}
+COLORS = {"LD2": "black", "CxC": "#1f77b4", "Cu": "#d62728", "Sn": "#2ca02c"}  # standard target colours
 
 # --- cut values (config/cuts.json); passed in, defaulted here for clarity ---
 MPI0 = 0.1349768

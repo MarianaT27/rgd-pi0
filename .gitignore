@@ -51,3 +51,9 @@ compile_commands.json
 /analysis/f10/
 /analysis/full/
 /analysis/logs/
+/analysis/binning_v2/
+/analysis/clas6_q2nu/
+/analysis/ndis/
+/farm_ndis/
+/patches/
+/*.tar.gz

@@ -471,6 +471,59 @@ Cuts Cuts::load(const std::string& json_path) {
                           "deletes data. Widen the axis; do not run with a lossy one.");
     }
 
+    // -- bsa / polarization ---------------------------------------------------
+    //
+    // One Moller measurement per period, applied to every run of the period
+    // (LE note 11/14/24, RG-D wiki Run Info tab). Refused unless the periods are
+    // sorted, contiguous and non-overlapping, so every run in the covered range
+    // has exactly one polarization and no run can fall between two periods.
+    {
+        const std::string path = "bsa.polarization.periods";
+        const json& arr = r.array(path);
+        if (arr.empty()) r.fail(path, "is empty. Without a polarization table A_LU cannot be formed.");
+        for (std::size_t i = 0; i < arr.size(); ++i) {
+            const std::string at = path + "[" + std::to_string(i) + "]";
+            const json& e = arr[i];
+            if (!e.is_object()) r.fail(at, "is not an object");
+            PolarizationPeriod pp;
+            const auto rit = e.find("runs");
+            if (rit == e.end() || !rit->is_array() || rit->size() != 2 || !(*rit)[0].is_number_integer() ||
+                !(*rit)[1].is_number_integer()) {
+                r.fail(at + ".runs", "must be [first_run, last_run], two integers");
+            }
+            pp.run_min = (*rit)[0].get<int>();
+            pp.run_max = (*rit)[1].get<int>();
+            if (pp.run_max < pp.run_min) r.fail(at + ".runs", "has last_run < first_run");
+            pp.p = r.num_in(e, "P", at + ".P");
+            pp.p_err = r.num_in(e, "P_err", at + ".P_err");
+            if (!(pp.p > 0.0 && pp.p <= 1.0)) {
+                r.fail(at + ".P", "is " + std::to_string(pp.p) + ", not in (0, 1]. P is the MAGNITUDE, as a fraction.");
+            }
+            if (!(pp.p_err >= 0.0)) r.fail(at + ".P_err", "is negative");
+            const auto hit = e.find("hwp");
+            if (hit == e.end() || !hit->is_string() || (hit->get<std::string>() != "IN" && hit->get<std::string>() != "OUT")) {
+                r.fail(at + ".hwp", "must be \"IN\" or \"OUT\"");
+            }
+            pp.hwp = hit->get<std::string>();
+            const auto lit = e.find("logbook");
+            if (lit == e.end() || !lit->is_number_integer()) r.fail(at + ".logbook", "must be an integer");
+            pp.logbook = lit->get<long long>();
+            if (!c.bsa.polarization.empty()) {
+                const PolarizationPeriod& prev = c.bsa.polarization.back();
+                if (pp.run_min <= prev.run_max) {
+                    r.fail(at + ".runs", "overlaps the previous period (" + std::to_string(prev.run_min) + "-" +
+                                             std::to_string(prev.run_max) + "). Periods must be sorted and disjoint.");
+                }
+                if (pp.run_min != prev.run_max + 1) {
+                    r.fail(at + ".runs", "leaves a gap after the previous period (which ends at " +
+                                             std::to_string(prev.run_max) + "). A run in the gap would have no "
+                                             "polarization; periods must be contiguous.");
+                }
+            }
+            c.bsa.polarization.push_back(pp);
+        }
+    }
+
     // -- mixing --------------------------------------------------------------
     //
     // The frozen donor pool's grid and knobs (stageB_bin/DonorPool.hpp). This
@@ -558,6 +611,13 @@ Cuts Cuts::load(const std::string& json_path) {
                  "The GBT pre-filter requires E_PCAL > 0 unconditionally.");
 
     return c;
+}
+
+int Cuts::polarization_period(int run) const {
+    for (std::size_t i = 0; i < bsa.polarization.size(); ++i) {
+        if (run >= bsa.polarization[i].run_min && run <= bsa.polarization[i].run_max) return static_cast<int>(i);
+    }
+    return -1;
 }
 
 }  // namespace pi0

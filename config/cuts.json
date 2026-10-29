@@ -201,9 +201,18 @@
       "_max_chi2_ndf_comment": "Reject fits above this. The old production's railed leaves reported chi2/ndf ~ 1e11."
     },
     "polarization": {
-      "_comment": "BEAM POLARIZATION. THESE ARE NULL ON PURPOSE AND MUST STAY NULL until an RG-D Moller measurement is available for the run period. Null means NOT MEASURED. pi0/bsa.py REFUSES TO RUN when both this key and its --polarization argument are absent; it does not substitute a value. The superseded analysis hard-coded BEAM_POLARIZATION = 0.85, self-declared as a placeholder in its own source, and every A_LU it published is therefore provisional by a factor 0.85 / P_true (note sec:bsa-polarization). Its companion BEAM_POLARIZATION_ERR = 0.03 was defined and never imported anywhere, so the ~3.5% fully-correlated scale uncertainty is missing from every old number; `error` below is that value's proper home and IS propagated by pi0/bsa.py.",
-      "value": 0.790,
-      "error": 0.015
+      "_comment": "BEAM POLARIZATION PER RUN PERIOD (v0.2.1). One Moller measurement per period, applied to every run from its first run to the run before the next measurement, and NOT averaged over the run period: LE note 11/14/24, following S. Stepanyan, and the RG-D analysis wiki, Run Info tab (https://clasweb.jlab.org/wiki/index.php/Run_Group_D#tab=Run_Info). P is the MAGNITUDE as a fraction: the wiki quotes negative values for HWP IN, but REC::Event.helicity, which Stage A reads, is already HWP-corrected, so the signed value would flip A_LU a second time. hwp is information only. Stage B looks up each event's run here and stores, per 4D bin, how many BSA entries came from each period; pi0.bsa divides each bin's A_LU by the count-weighted mean |P| of that bin, and propagates the count-weighted mean P_err as a scale uncertainty, separate from the statistical one. Cuts::load refuses periods that overlap or leave a gap; Stage B refuses a run outside the table. The single value 0.790 +- 0.015 used before v0.2.1 is removed on purpose.",
+      "periods": [
+        {"runs": [18305, 18401], "P": 0.79228, "P_err": 0.01498, "hwp": "IN", "logbook": 4193442},
+        {"runs": [18402, 18498], "P": 0.78012, "P_err": 0.01473, "hwp": "OUT", "logbook": 4197887},
+        {"runs": [18499, 18587], "P": 0.79089, "P_err": 0.01477, "hwp": "OUT", "logbook": 4202624},
+        {"runs": [18588, 18656], "P": 0.79665, "P_err": 0.01583, "hwp": "IN", "logbook": 4208922},
+        {"runs": [18657, 18790], "P": 0.7955, "P_err": 0.02035, "hwp": "OUT", "logbook": 4213710},
+        {"runs": [18791, 18816], "P": 0.84818, "P_err": 0.01574, "hwp": "OUT", "logbook": 4220054},
+        {"runs": [18817, 18956], "P": 0.8318, "P_err": 0.0157, "hwp": "OUT", "logbook": 4221922},
+        {"runs": [18957, 19020], "P": 0.73788, "P_err": 0.01463, "hwp": "IN", "logbook": 4229016},
+        {"runs": [19021, 19131], "P": 0.80262, "P_err": 0.01463, "hwp": "IN", "logbook": 4230331}
+      ]
     },
     "_range_comment": "THE RANGE IS NOT A FREE CHOICE. pi0::kin::compute_sidis returns phi_h from atan2 in the TRENTO convention, so it lands in [-180, 180]. An axis over [0, 360] -- the other common convention -- would put every negative phi_h off the grid, and an off-grid value is DISCARDED WITHOUT AN ERROR: half the data would vanish silently and the asymmetry would still fit and still look like an asymmetry. Cuts::load refuses any axis narrower than [-180, 180] for exactly that reason. If the convention ever changes, change the producer and this key together.",
     "_helicity_comment": "There is deliberately NO helicity key here. helicity == 0 means UNDEFINED (REC::Event.helicity, 0=UDF -- see stageA_skim's helicity.convention provenance), not a third state to configure. stageB_bin fills the BSA for helicity == +-1 only, and lets helicity == 0 events enter every other output, because the m_gg spectra, the donor pool and N_DIS are all helicity-blind. Dropping helicity == 0 from the pool would shrink the donor sample for no physics reason and give the mixed background a different parent sample from the same-event spectrum it has to subtract from.",

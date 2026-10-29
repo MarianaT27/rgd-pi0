@@ -63,7 +63,10 @@ GRID_A_NU = Path("config/binning/grid_A_q2_nu.json")
 OURS = ["CxC", "Cu", "Sn"]
 THEIRS = {"CxC": "C", "Cu": "Fe", "Sn": "Pb"}          # drawn side by side
 LABEL = {"CxC": "C", "Cu": "Cu", "Sn": "Sn"}
-COLOR = {"CxC": "tab:blue", "Cu": "tab:orange", "Sn": "tab:green"}
+COLOR = {"CxC": "#1f77b4", "Cu": "#d62728", "Sn": "#2ca02c"}   # standard RG-D target colours
+# CLAS6 nuclei: same colour for the same nucleus (C), a darker shade of the nearest RG-D
+# nucleus otherwise (Fe A=56 next to Cu A=63, Pb A=208 next to Sn A=119). Open markers.
+THEIR_COLOR = {"CxC": "#1f77b4", "Cu": "maroon", "Sn": "darkgreen"}
 Q2_RANGE = (1.0, 4.1)       # set 1 integrates Q2 over their full range
 PT2_RANGE = (0.0, 1.5)      # set 2 integrates pT2 over their full range
 EPS = 1e-6
@@ -203,7 +206,7 @@ def main():
             if hv:
                 hx, hy, he = map(np.array, zip(*hv))
                 ax.errorbar(hx + dx + 0.004 * (max(r[xkey_hi] for r in sub)), hy, yerr=he, fmt="s",
-                            mfc="none", ms=4, color=COLOR[t], capsize=1.5, lw=0.8, label=f"CLAS6 {th}")
+                            mfc="none", ms=4, color=THEIR_COLOR[t], capsize=1.5, lw=0.8, label=f"CLAS6 {th}")
         ax.axhline(1.0, color="gray", lw=0.6, ls="--")
         ax.set_ylim(0.0, 1.6)
 

@@ -8,7 +8,7 @@ left undefined:
 2. the abscissa is the **signal's** count-weighted mean, not the full-window
    mean and certainly not a box centre;
 3. the quality gates actually reject;
-4. ``bsa`` refuses to run without a beam polarization.
+4. ``bsa`` uses the measured per-run beam polarization and never a default.
 
 Everything is built from an analytic model with known truth, so a failure here
 means the code is wrong, not that the data is hard.
@@ -360,42 +360,90 @@ def test_no_sideband_mixed_is_rejected_not_defaulted(cfg):
 
 
 # --------------------------------------------------------------------------
-# 6. bsa refuses to run without a polarization
+# 6. bsa: per-run beam polarization (v0.2.1), never a default
 # --------------------------------------------------------------------------
-def test_bsa_raises_without_polarization(cfg):
-    """A_LU cannot be formed without P, and this module will not invent one."""
-    assert cfg.bsa.polarization is None, (
-        "cuts.json must ship with a NULL polarization: there is no RG-D Moller measurement, "
-        "and a number here would be the old code's 0.85 placeholder by another name."
-    )
-    with pytest.raises(bsa.PolarizationError, match="No beam polarization"):
-        bsa.compute_bsa(None, cfg)  # must raise before it ever touches the data
+def test_polarization_table_is_read(cfg):
+    """cuts.json carries the 9 Moller periods of RG-D, contiguous from 18305 to 19131."""
+    pp = cfg.bsa.polarization_periods
+    assert len(pp) == 9
+    assert (pp[0].run_min, pp[0].run_max, pp[0].p, pp[0].p_err, pp[0].hwp) == (18305, 18401, 0.79228, 0.01498, "IN")
+    assert (pp[-1].run_min, pp[-1].run_max, pp[-1].p, pp[-1].p_err) == (19021, 19131, 0.80262, 0.01463)
+    assert cfg.bsa.polarization_period(18401) == 0
+    assert cfg.bsa.polarization_period(18402) == 1
+    assert cfg.bsa.polarization_period(18957) == 7
+    assert cfg.bsa.polarization_period(18304) == -1
+    assert cfg.bsa.polarization_period(19132) == -1
 
 
-def test_bsa_never_defaults_to_the_old_placeholder(cfg):
-    """The string 0.85 must not be reachable as a default anywhere in the resolution."""
-    with pytest.raises(bsa.PolarizationError):
-        bsa._resolve_polarization(cfg.bsa, None, None)
-    with pytest.raises(bsa.PolarizationError):
-        bsa._resolve_polarization(cfg.bsa, None, 0.03)  # an error without a value is still nothing
+def test_no_override_means_use_the_table():
+    """Neither --polarization nor --polarization-err: the per-run table is used."""
+    assert bsa._resolve_polarization(None, None) is None
 
 
-def test_bsa_requires_the_polarization_uncertainty_too(cfg):
-    """P without sigma_P is refused: the old code defined the error and never imported it."""
+def test_override_needs_both_values():
+    """P without sigma_P, or sigma_P without P, is refused."""
     with pytest.raises(bsa.PolarizationError, match="without its uncertainty"):
-        bsa._resolve_polarization(cfg.bsa, 0.86, None)
+        bsa._resolve_polarization(0.86, None)
+    with pytest.raises(bsa.PolarizationError, match="without --polarization"):
+        bsa._resolve_polarization(None, 0.03)
 
 
-def test_bsa_accepts_an_explicit_polarization(cfg):
+def test_override_is_accepted():
     """An explicit (P, sigma_P) is accepted and returned unchanged."""
-    assert bsa._resolve_polarization(cfg.bsa, 0.86, 0.03) == (0.86, 0.03)
+    assert bsa._resolve_polarization(0.86, 0.03) == (0.86, 0.03)
 
 
-@pytest.mark.parametrize("bad", [0.0, -0.5, 1.5])
-def test_bsa_rejects_unphysical_polarization(cfg, bad):
-    """P outside (0, 1] is not a polarization."""
+@pytest.mark.parametrize("bad", [0.0, -0.5, 1.5, 79.0])
+def test_override_rejects_unphysical_polarization(bad):
+    """P outside (0, 1] is not a polarization (79.0: a percentage)."""
     with pytest.raises(bsa.PolarizationError):
-        bsa._resolve_polarization(cfg.bsa, bad, 0.03)
+        bsa._resolve_polarization(bad, 0.03)
+
+
+def _fake_data(cfg, bsa_pol):
+    from types import SimpleNamespace
+    return SimpleNamespace(path="fake.root", bsa_pol=bsa_pol)
+
+
+def test_bin_polarization_by_hand(cfg):
+    """<P>_bin = sum_k N_k |P_k| / sum_k N_k, the same weighting for sigma_P.
+
+    Bin 0: 3 entries in period 0 (P = 0.79228 +- 0.01498) and 1 in period 7
+    (P = 0.73788 +- 0.01463):
+        <P>     = (3 * 0.79228 + 0.73788) / 4 = 0.77868
+        sigma_P = (3 * 0.01498 + 0.01463) / 4 = 0.0148925
+    Bin 1: only period 8, so exactly that period's P.
+    Bin 2: no entries, so nan (never a default).
+    """
+    n4d, nper = cfg.binning.n_4d, len(cfg.bsa.polarization_periods)
+    w = np.zeros((n4d, nper), dtype=np.int64)
+    w[0, 0], w[0, 7] = 3, 1
+    w[1, 8] = 5
+    p, e = bsa.bin_polarization(_fake_data(cfg, w), cfg)
+    assert p[0] == pytest.approx(0.77868, abs=1e-12)
+    assert e[0] == pytest.approx(0.0148925, abs=1e-12)
+    assert p[1] == pytest.approx(0.80262, abs=1e-12)
+    assert e[1] == pytest.approx(0.01463, abs=1e-12)
+    assert np.isnan(p[2]) and np.isnan(e[2])
+
+
+def test_bin_polarization_override(cfg):
+    """With an override every bin gets that value, even without a bsa_pol tree."""
+    p, e = bsa.bin_polarization(_fake_data(cfg, None), cfg, (0.79, 0.015))
+    assert np.all(p == 0.79) and np.all(e == 0.015)
+
+
+def test_bin_polarization_refuses_an_old_file(cfg):
+    """A Stage B file from before v0.2.1 has no bsa_pol tree: refuse, do not guess."""
+    with pytest.raises(bsa.PolarizationError, match="rerun Stage B v0.2.1|Rerun Stage B v0.2.1"):
+        bsa.bin_polarization(_fake_data(cfg, None), cfg)
+
+
+def test_bin_polarization_refuses_a_different_table(cfg):
+    """bsa_pol with a different number of periods than cuts.json is refused."""
+    w = np.zeros((cfg.binning.n_4d, 3), dtype=np.int64)
+    with pytest.raises(bsa.PolarizationError, match="not the one Stage B used"):
+        bsa.bin_polarization(_fake_data(cfg, w), cfg)
 
 
 # --------------------------------------------------------------------------

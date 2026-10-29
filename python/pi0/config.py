@@ -414,12 +414,27 @@ class ExtractionCuts:
 
 
 @dataclass(frozen=True)
+class PolarizationPeriod:
+    """One beam-polarization period of ``cuts.json /bsa/polarization/periods``.
+
+    ``p`` is the magnitude ``|P|`` as a fraction (REC::Event.helicity is already
+    HWP-corrected); ``hwp`` is information only.
+    """
+
+    run_min: int
+    run_max: int
+    p: float
+    p_err: float
+    hwp: str
+    logbook: int
+
+
+@dataclass(frozen=True)
 class BsaCuts:
     """The ``bsa`` block of ``cuts.json``.
 
-    ``polarization`` is deliberately allowed to be ``None`` here so that
-    :mod:`pi0.bsa` can raise its own explanatory error. It is **never**
-    defaulted to a number -- see the note's ``sec:bsa-polarization``.
+    ``polarization_periods`` is the per-run beam polarization (v0.2.1): each run
+    takes the ``|P|`` of its Moller period, with no run-period average.
     """
 
     phi: PhiAxis
@@ -431,8 +446,14 @@ class BsaCuts:
     amp_at_bound_tol_frac: float
     sigma_amp_min: float
     max_chi2_ndf: float
-    polarization: float | None
-    polarization_err: float | None
+    polarization_periods: tuple[PolarizationPeriod, ...]
+
+    def polarization_period(self, run: int) -> int:
+        """Index of the period containing ``run``, or -1 (never a default)."""
+        for k, pp in enumerate(self.polarization_periods):
+            if pp.run_min <= run <= pp.run_max:
+                return k
+        return -1
 
 
 @dataclass(frozen=True)
@@ -574,10 +595,7 @@ def load_config(config_dir: str | Path, grid_a: str | Path | None = None,
         amp_at_bound_tol_frac=float(require(cuts, "bsa/quality/amp_at_bound_tol_frac")),
         sigma_amp_min=float(require(cuts, "bsa/quality/sigma_amp_min")),
         max_chi2_ndf=float(require(cuts, "bsa/quality/max_chi2_ndf")),
-        # These two are REQUIRED KEYS but MAY BE NULL. Null means "not measured",
-        # which pi0.bsa turns into a refusal to run, not into 0.85.
-        polarization=_optional_float(bsa_doc, "polarization/value"),
-        polarization_err=_optional_float(bsa_doc, "polarization/error"),
+        polarization_periods=_polarization_periods(bsa_doc),
     )
 
     broadening = BroadeningCuts(min_counts=float(require(cuts, "broadening/min_counts")))
@@ -593,6 +611,34 @@ def load_config(config_dir: str | Path, grid_a: str | Path | None = None,
         bsa=bsa,
         broadening=broadening,
     )
+
+
+def _polarization_periods(bsa_doc: Any) -> tuple[PolarizationPeriod, ...]:
+    """Read and validate ``/bsa/polarization/periods`` (same rules as C++ Cuts::load)."""
+    rows = require(bsa_doc, "polarization/periods", expect=list)
+    if not rows:
+        raise ConfigError("bsa/polarization/periods is empty: A_LU cannot be formed without it")
+    out: list[PolarizationPeriod] = []
+    for i, r in enumerate(rows):
+        runs = r.get("runs")
+        if not (isinstance(runs, list) and len(runs) == 2 and all(isinstance(x, int) for x in runs)):
+            raise ConfigError(f"bsa/polarization/periods[{i}]/runs must be [first_run, last_run]")
+        pp = PolarizationPeriod(run_min=runs[0], run_max=runs[1], p=float(r["P"]), p_err=float(r["P_err"]),
+                                hwp=str(r["hwp"]), logbook=int(r["logbook"]))
+        if pp.run_max < pp.run_min:
+            raise ConfigError(f"bsa/polarization/periods[{i}]/runs has last_run < first_run")
+        if not (0.0 < pp.p <= 1.0):
+            raise ConfigError(f"bsa/polarization/periods[{i}]/P = {pp.p} is not in (0, 1] (the MAGNITUDE, a fraction)")
+        if pp.p_err < 0.0:
+            raise ConfigError(f"bsa/polarization/periods[{i}]/P_err is negative")
+        if pp.hwp not in ("IN", "OUT"):
+            raise ConfigError(f"bsa/polarization/periods[{i}]/hwp must be IN or OUT")
+        if out and pp.run_min <= out[-1].run_max:
+            raise ConfigError(f"bsa/polarization/periods[{i}] overlaps the previous period")
+        if out and pp.run_min != out[-1].run_max + 1:
+            raise ConfigError(f"bsa/polarization/periods[{i}] leaves a gap after the previous period")
+        out.append(pp)
+    return tuple(out)
 
 
 def _optional_float(node: Any, path: str) -> float | None:

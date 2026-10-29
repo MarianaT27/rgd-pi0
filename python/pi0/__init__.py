@@ -6,7 +6,7 @@ produces the four observables:
 ===============  ==========================================================
 :mod:`pi0.ratio`       ``R_A`` per 4D bin
 :mod:`pi0.broadening`  ``Delta<pT2>`` per 3D bin, **sideband-subtracted**
-:mod:`pi0.bsa`         ``A_LU``, dilution-corrected, polarization mandatory
+:mod:`pi0.bsa`         ``A_LU``, dilution-corrected, per-run beam polarization
 :mod:`pi0.qa`          diagnostics, including the abscissa-vs-centre plot
 ===============  ==========================================================
 
@@ -28,7 +28,7 @@ Three invariants hold across the package:
 
 from __future__ import annotations
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 __all__ = ["config", "io", "extract", "ratio", "broadening", "bsa", "qa", "__version__"]
 

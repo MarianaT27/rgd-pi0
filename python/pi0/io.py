@@ -148,6 +148,13 @@ class StageBData:
         Shape ``(n_4d, n_mgg, n_phi, 2)``, integer, with the last axis
         ``[helicity +1, helicity -1]``. Densified from the sparse tree **via
         its index columns** -- a positional read of that tree is silently wrong.
+    bsa_pol : numpy.ndarray or None
+        Shape ``(n_4d, n_periods)``, integer: BSA entries per beam-polarization
+        period (``cuts.json /bsa/polarization/periods``). ``None`` for a file
+        written before v0.2.1, which has no ``bsa_pol`` tree.
+    runs : dict or None
+        ``{"run", "period", "P", "events"}`` arrays from the ``runs`` tree, or
+        ``None`` for a file written before v0.2.1.
     prov, prov_stage_a : Provenance
         Stage B's own provenance and Stage A's, propagated verbatim.
     blockers : list of Blocker
@@ -170,6 +177,8 @@ class StageBData:
     prov: Provenance
     prov_stage_a: Provenance
     blockers: list[Blocker] = field(default_factory=list)
+    bsa_pol: NDArray[np.int64] | None = None
+    runs: dict[str, NDArray] | None = None
 
     @property
     def target(self) -> str:
@@ -452,6 +461,8 @@ def load(
         ptb = f["ptb3d"].arrays(library="np")
         ndis_t = f["n_dis"].arrays(library="np")
         bsa_t = f["bsa"].arrays(library="np")
+        bsa_pol_t = f["bsa_pol"].arrays(library="np") if "bsa_pol" in f else None
+        runs_t = f["runs"].arrays(library="np") if "runs" in f else None
 
     # --- spectra: dense, n_4d * n_mgg rows in index order. Verify, do not assume.
     want = b.n_4d * n_mgg
@@ -512,6 +523,21 @@ def load(
         ihel = np.where(hel == 1, 0, 1)
         np.add.at(bsa, (i4, im, ip, ihel), bsa_t["counts"].astype(np.int64))
 
+    # --- bsa_pol: SPARSE (bin4d, period, counts). Absent before v0.2.1.
+    bsa_pol = None
+    if bsa_pol_t is not None:
+        n_per = len(cfg.bsa.polarization_periods)
+        bsa_pol = np.zeros((b.n_4d, n_per), dtype=np.int64)
+        if len(bsa_pol_t["counts"]):
+            i4 = bsa_pol_t["bin4d"].astype(np.int64)
+            k = bsa_pol_t["period"].astype(np.int64)
+            if np.any((i4 < 0) | (i4 >= b.n_4d)) or np.any((k < 0) | (k >= n_per)):
+                raise SchemaError(
+                    f"{path}: bsa_pol has a bin4d or period index outside the configured binning / "
+                    f"polarization table ({n_per} periods). Was it made with a different cuts.json?"
+                )
+            np.add.at(bsa_pol, (i4, k), bsa_pol_t["counts"].astype(np.int64))
+
     data = StageBData(
         path=path,
         binning=b,
@@ -526,6 +552,8 @@ def load(
         ptb_sum_pt4=ptb["sum_pt4"].astype(np.float64).reshape(b.n_3d, n_mgg),
         n_dis=n_dis,
         bsa=bsa,
+        bsa_pol=bsa_pol,
+        runs=runs_t,
         prov=prov,
         prov_stage_a=prov_a,
         blockers=blockers,

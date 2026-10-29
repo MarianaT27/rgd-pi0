@@ -351,6 +351,75 @@ TEST_CASE("Cuts::load parses config/cuts.json and yields the documented values",
 // Cuts::load -- failing loudly
 // ===========================================================================
 
+TEST_CASE("Cuts::load reads the per-run beam polarization table", "[cuts][polarization]") {
+    const pi0::Cuts& c = shipped_cuts();
+    const auto& pol = c.bsa.polarization;
+    REQUIRE(pol.size() == 9u);
+    // First and last rows, transcribed from the RG-D wiki (Run Info tab). |P| as a fraction.
+    CHECK(pol.front().run_min == 18305);
+    CHECK(pol.front().run_max == 18401);
+    CHECK_THAT(pol.front().p, WithinAbs(0.79228, 1e-12));
+    CHECK_THAT(pol.front().p_err, WithinAbs(0.01498, 1e-12));
+    CHECK(pol.front().hwp == "IN");
+    CHECK(pol.back().run_min == 19021);
+    CHECK(pol.back().run_max == 19131);
+    CHECK_THAT(pol.back().p, WithinAbs(0.80262, 1e-12));
+    // Every |P| is a magnitude: positive even for HWP IN.
+    for (const auto& pp : pol) CHECK(pp.p > 0.0);
+
+    SECTION("a run maps to the period that contains it, edges included") {
+        CHECK(c.polarization_period(18305) == 0);
+        CHECK(c.polarization_period(18401) == 0);
+        CHECK(c.polarization_period(18402) == 1);
+        CHECK(c.polarization_period(18431) == 1);
+        CHECK(c.polarization_period(18957) == 7);
+        CHECK(c.polarization_period(19131) == 8);
+    }
+    SECTION("a run outside the table is -1, never a default") {
+        CHECK(c.polarization_period(18304) == -1);
+        CHECK(c.polarization_period(19132) == -1);
+        CHECK(c.polarization_period(0) == -1);
+    }
+}
+
+TEST_CASE("Cuts::load refuses a bad polarization table", "[cuts][polarization][loud]") {
+    SECTION("overlapping periods") {
+        nlohmann::json doc = parsed_cuts_json();
+        doc["bsa"]["polarization"]["periods"][1]["runs"][0] = 18400;
+        const std::string path = write_temp_json(doc, "pol_overlap");
+        CHECK_THROWS_WITH(pi0::Cuts::load(path), ContainsSubstring("overlaps"));
+        std::remove(path.c_str());
+    }
+    SECTION("a gap between periods") {
+        nlohmann::json doc = parsed_cuts_json();
+        doc["bsa"]["polarization"]["periods"][1]["runs"][0] = 18410;
+        const std::string path = write_temp_json(doc, "pol_gap");
+        CHECK_THROWS_WITH(pi0::Cuts::load(path), ContainsSubstring("gap"));
+        std::remove(path.c_str());
+    }
+    SECTION("a signed (negative) P") {
+        nlohmann::json doc = parsed_cuts_json();
+        doc["bsa"]["polarization"]["periods"][0]["P"] = -0.79228;
+        const std::string path = write_temp_json(doc, "pol_sign");
+        CHECK_THROWS_WITH(pi0::Cuts::load(path), ContainsSubstring("MAGNITUDE"));
+        std::remove(path.c_str());
+    }
+    SECTION("P given in percent") {
+        nlohmann::json doc = parsed_cuts_json();
+        doc["bsa"]["polarization"]["periods"][0]["P"] = 79.228;
+        const std::string path = write_temp_json(doc, "pol_percent");
+        CHECK_THROWS_WITH(pi0::Cuts::load(path), ContainsSubstring("not in (0, 1]"));
+        std::remove(path.c_str());
+    }
+    SECTION("an empty table") {
+        nlohmann::json doc = parsed_cuts_json();
+        doc["bsa"]["polarization"]["periods"] = nlohmann::json::array();
+        const std::string path = write_temp_json(doc, "pol_empty");
+        CHECK_THROWS_WITH(pi0::Cuts::load(path), ContainsSubstring("is empty"));
+        std::remove(path.c_str());
+    }
+}
+
 TEST_CASE("Cuts::load THROWS on a missing key, and names it", "[cuts][loud]") {
     // Every key below is deleted from an OTHERWISE COMPLETE copy of the real
     // config, so each case isolates exactly one missing key.

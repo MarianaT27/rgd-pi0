@@ -8,15 +8,20 @@ fitted with the **single-parameter** model ``f(phi_h) = A sin(phi_h)``,
 
 Three things this module does that the superseded analysis did not:
 
-**1. It refuses to run without a beam polarization.**
-   ``cuts.json`` carries ``bsa/polarization/value: null`` -- null meaning *not
-   measured*, because no RG-D Møller number exists for these run periods. The
-   old code hard-coded ``BEAM_POLARIZATION = 0.85``, self-declared as a
-   placeholder in its own source, so every ``A_LU`` it published is provisional
-   by a factor ``0.85 / P_true``. There is **no default here**: supply
-   ``--polarization``/``--polarization-err``, or fill the config key, or get
-   nothing. ``sigma_P`` is propagated (the old ``BEAM_POLARIZATION_ERR = 0.03``
-   was defined and never imported anywhere).
+**1. It uses the measured per-run beam polarization (v0.2.1).**
+   ``cuts.json /bsa/polarization/periods`` holds the Møller measurements; each
+   applies to the runs from its first run until the next measurement, with no
+   averaging over the run period. Stage B counts the BSA entries of each 4D bin
+   per period (tree ``bsa_pol``), and each bin is divided by its own
+
+       <P>_bin = sum_k N_bin,k |P_k| / sum_k N_bin,k,
+
+   with ``sigma_P`` of the bin the same weighted mean of the period errors. It is
+   a fully-correlated scale uncertainty and is kept in its own CSV column.
+   ``|P|`` is used because REC::Event.helicity is already HWP-corrected.
+   ``--polarization``/``--polarization-err`` override the table with one value
+   for every bin (both or neither). The old code hard-coded
+   ``BEAM_POLARIZATION = 0.85``; there is still no default here.
 
 **2. It applies the dilution correction.**
    ``A_LU^meas = A_LU^true * S/(S+B)``. Stage B bins the helicity counts in
@@ -48,7 +53,7 @@ from scipy.optimize import OptimizeWarning, curve_fit
 from .progress import track
 
 from . import extract, io
-from .config import BsaCuts, Config, load_config
+from .config import Config, load_config
 
 __all__ = ["PolarizationError", "BsaResult", "compute_bsa", "main"]
 
@@ -85,6 +90,9 @@ class BsaResult:
         Whether every gate and the fit-quality mask passed.
     reason : str
         ``"ok"`` or the gate it failed.
+    p_mean, p_err : float
+        The beam polarization ``<P>`` this bin was divided by, and its scale
+        uncertainty ``sigma_P`` (count-weighted over the polarization periods).
     """
 
     bin4d: int
@@ -102,6 +110,8 @@ class BsaResult:
     phi_used: NDArray[np.bool_]
     ok: bool
     reason: str
+    p_mean: float = float("nan")
+    p_err: float = float("nan")
 
     @property
     def chi2_ndf(self) -> float:
@@ -110,42 +120,70 @@ class BsaResult:
 
 
 def _resolve_polarization(
-    cuts: BsaCuts, polarization: float | None, polarization_err: float | None
-) -> tuple[float, float]:
-    """Resolve the beam polarization from the CLI argument or the config key.
+    polarization: float | None, polarization_err: float | None
+) -> tuple[float, float] | None:
+    """Check the ``--polarization`` override. ``None`` means: use the per-run table.
 
     Raises
     ------
     PolarizationError
-        If neither source supplies a value. **This function has no default.**
+        If only one of the two is given, or a value is out of range.
     """
-    p = polarization if polarization is not None else cuts.polarization
-    if p is None:
+    if polarization is None and polarization_err is None:
+        return None
+    if polarization is None:
+        raise PolarizationError("--polarization-err was given without --polarization.")
+    if polarization_err is None:
         raise PolarizationError(
-            "No beam polarization. A_LU = (1/P) * (N+ - N-)/(N+ + N-) cannot be formed without "
-            "one, and this module will not invent it.\n"
-            "  cuts.json /bsa/polarization/value is null, meaning NOT MEASURED: there is no "
-            "RG-D Moller number for this run period yet.\n"
-            "  Supply --polarization P --polarization-err sigma_P, or fill the config key once "
-            "the measurement exists.\n"
-            "  The superseded analysis hard-coded P = 0.85 -- self-declared as a placeholder in "
-            "its own source -- so every A_LU it published scales by 0.85/P_true. Reproducing "
-            "that number here would reproduce the defect. Obtaining the measured Moller "
-            "polarization is the single blocking item for this observable."
+            f"A beam polarization P = {polarization} was supplied without its uncertainty. "
+            f"A_LU ~ 1/P, so sigma_P is a fully-correlated scale uncertainty on every quoted A. "
+            f"Pass --polarization-err (0.0 is accepted, but say it)."
         )
-    pe = polarization_err if polarization_err is not None else cuts.polarization_err
-    if pe is None:
+    if not (0.0 < polarization <= 1.0):
+        raise PolarizationError(f"beam polarization P = {polarization} is not in (0, 1].")
+    if polarization_err < 0.0:
+        raise PolarizationError(f"beam polarization error sigma_P = {polarization_err} is negative.")
+    return float(polarization), float(polarization_err)
+
+
+def bin_polarization(
+    data: io.StageBData,
+    cfg: Config,
+    override: tuple[float, float] | None = None,
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Per-bin ``<P>`` and ``sigma_P``, shape ``(n_4d,)`` each.
+
+    With ``override = (P, sigma_P)`` every bin gets that value. Otherwise the
+    BSA entries of each bin per polarization period (``data.bsa_pol``) weight
+    the periods' ``|P|`` and ``sigma_P``. Bins with no BSA entry get ``nan``.
+
+    Raises
+    ------
+    PolarizationError
+        If no override is given and the file has no ``bsa_pol`` tree (written
+        before v0.2.1), or the table in ``cuts.json`` is not the one Stage B used.
+    """
+    n4d = cfg.binning.n_4d
+    if override is not None:
+        return np.full(n4d, override[0]), np.full(n4d, override[1])
+    if data.bsa_pol is None:
         raise PolarizationError(
-            f"A beam polarization P = {p} was supplied without its uncertainty. A_LU ~ 1/P, so "
-            f"sigma_P is a fully-correlated scale uncertainty on every quoted A. The old code "
-            f"defined BEAM_POLARIZATION_ERR and never imported it anywhere, which is precisely "
-            f"why it is mandatory here. Pass --polarization-err (0.0 is accepted, but say it)."
+            f"{data.path} has no 'bsa_pol' tree: it was written before v0.2.1, so the BSA "
+            f"entries per polarization period are unknown. Rerun Stage B v0.2.1, or pass "
+            f"--polarization P --polarization-err sigma_P to use one value for every bin."
         )
-    if not (0.0 < p <= 1.0):
-        raise PolarizationError(f"beam polarization P = {p} is not in (0, 1].")
-    if pe < 0.0:
-        raise PolarizationError(f"beam polarization error sigma_P = {pe} is negative.")
-    return float(p), float(pe)
+    periods = cfg.bsa.polarization_periods
+    if data.bsa_pol.shape != (n4d, len(periods)):
+        raise PolarizationError(
+            f"bsa_pol has shape {data.bsa_pol.shape}, expected ({n4d}, {len(periods)}): the "
+            f"polarization table in cuts.json is not the one Stage B used."
+        )
+    pk = np.array([pp.p for pp in periods])
+    ek = np.array([pp.p_err for pp in periods])
+    w = data.bsa_pol.astype(np.float64)
+    n = w.sum(axis=1)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return np.where(n > 0, w @ pk / n, np.nan), np.where(n > 0, w @ ek / n, np.nan)
 
 
 def _sin_model(phi: NDArray[np.float64], amp: float) -> NDArray[np.float64]:
@@ -171,9 +209,9 @@ def compute_bsa(
     cfg : Config
         Configuration.
     polarization, polarization_err : float, optional
-        Beam polarization and its uncertainty. If ``None``, the config key is
-        used; if that is null too, :class:`PolarizationError` is raised. There
-        is deliberately **no default value**.
+        Override: one beam polarization and uncertainty for every bin. Both or
+        neither. If neither, each bin uses its count-weighted ``<P>`` from the
+        per-run table (:func:`bin_polarization`).
     require_dilution : bool, default True
         If True, a bin whose ``S/(S+B)`` cannot be measured (its spectra fit
         failed) is **dropped**, rather than reported as an uncorrected lower
@@ -191,7 +229,8 @@ def compute_bsa(
     Raises
     ------
     PolarizationError
-        If no polarization is available.
+        If the override is malformed, or there is no override and the file has
+        no ``bsa_pol`` tree.
 
     Notes
     -----
@@ -209,7 +248,8 @@ def compute_bsa(
     is conservative.
     """
     stream = stream if stream is not None else sys.stderr
-    p, p_err = _resolve_polarization(cfg.bsa, polarization, polarization_err)
+    override = _resolve_polarization(polarization, polarization_err)
+    p_bin, p_err_bin = bin_polarization(data, cfg, override)
     bc = cfg.bsa
     phi_rad = bc.phi.centres_rad
 
@@ -267,6 +307,10 @@ def compute_bsa(
             out.append(fail(i, "too_few_phi_bins", n_plus=n_plus, n_minus=n_minus))
             continue
 
+        p, p_err = float(p_bin[i]), float(p_err_bin[i])
+        if not (np.isfinite(p) and p > 0):
+            out.append(fail(i, "no_polarization_entries", n_plus=n_plus, n_minus=n_minus))
+            continue
         r = (n_plus[used] - n_minus[used]) / n_tot[used]  # r = P * A_LU
         a_lu = r / p
         # sigma = (1/P) sqrt((1 - r^2)/N): the exact binomial variance of r,
@@ -302,7 +346,7 @@ def compute_bsa(
         common = dict(
             amp_raw=amp_raw, amp_raw_err=amp_raw_err, chi2=chi2, ndf=ndf,
             n_plus=n_plus, n_minus=n_minus, phi_used=used,
-            signal_fraction=f_s, signal_fraction_err=f_s_err,
+            signal_fraction=f_s, signal_fraction_err=f_s_err, p_mean=p, p_err=p_err,
         )
         if abs(amp_raw) >= bound * (1.0 - bc.amp_at_bound_tol_frac):
             # The minimiser walked into the wall: its error is meaningless and
@@ -332,7 +376,13 @@ def compute_bsa(
         )
 
     n_ok = sum(1 for x in out if x.ok)
-    print(f"bsa: {n_ok} of {cfg.binning.n_4d} bins survived (P = {p} +- {p_err}).", file=stream)
+    if override is not None:
+        ptxt = f"P = {override[0]} +- {override[1]} for every bin (--polarization override)"
+    else:
+        pm = np.array([x.p_mean for x in out if x.ok])
+        ptxt = (f"per-bin <P> from {len(cfg.bsa.polarization_periods)} periods, "
+                f"range {pm.min():.4f} to {pm.max():.4f}" if len(pm) else "per-bin <P>")
+    print(f"bsa: {n_ok} of {cfg.binning.n_4d} bins survived ({ptxt}).", file=stream)
     if rejected:
         for code, n in sorted(rejected.items(), key=lambda kv: -kv[1]):
             print(f"    {n:6d}  {code}", file=stream)
@@ -348,9 +398,10 @@ def compute_bsa(
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI: compute ``A_LU`` per 4D bin. Refuses to run without a polarization."""
+    """CLI: compute ``A_LU`` per 4D bin, with the per-run beam polarization."""
     p = argparse.ArgumentParser(
-        description="Beam-spin asymmetry A_LU per 4D bin. Requires an explicit beam polarization."
+        description="Beam-spin asymmetry A_LU per 4D bin, each bin divided by its count-weighted "
+                    "beam polarization from cuts.json /bsa/polarization/periods."
     )
     p.add_argument("--file", required=True, type=Path, help="Stage B file")
     p.add_argument("--config", required=True, type=Path, help="config/ directory")
@@ -361,13 +412,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", required=True, type=Path, help="output CSV")
     p.add_argument(
         "--polarization", type=float, default=None,
-        help="measured beam polarization P. MANDATORY unless cuts.json /bsa/polarization/value "
-             "is set. There is no default -- 0.85 was the old code's self-declared placeholder.",
+        help="OVERRIDE: one beam polarization P for every bin instead of the per-run table "
+             "(e.g. for a comparison). Needs --polarization-err.",
     )
     p.add_argument(
         "--polarization-err", type=float, default=None,
-        help="uncertainty sigma_P on the beam polarization. Mandatory alongside --polarization; "
-             "it is a fully-correlated scale uncertainty on every A.",
+        help="uncertainty sigma_P of the --polarization override; a fully-correlated scale "
+             "uncertainty on every A.",
     )
     p.add_argument(
         "--allow-uncorrected-dilution", action="store_true",
@@ -397,6 +448,7 @@ def main(argv: list[str] | None = None) -> int:
             ("A_raw", np.float64), ("sA_raw", np.float64),
             ("signal_fraction", np.float64), ("dilution_applied", np.int64),
             ("chi2", np.float64), ("ndf", np.int64), ("n_events", np.int64),
+            ("P_mean", np.float64), ("P_err", np.float64),
         ]
     )
     rows = []
@@ -407,7 +459,7 @@ def main(argv: list[str] | None = None) -> int:
         rows.append(
             (r.bin4d, i_q2, i_xb, i_z, i_pt2, r.amp, r.amp_err, r.amp_raw, r.amp_raw_err,
              r.signal_fraction, int(r.dilution_applied), r.chi2, r.ndf,
-             int(r.n_plus.sum() + r.n_minus.sum()))
+             int(r.n_plus.sum() + r.n_minus.sum()), r.p_mean, r.p_err)
         )
     table = np.array(rows, dtype=dtype)
 
@@ -417,8 +469,12 @@ def main(argv: list[str] | None = None) -> int:
         "A_LU^{sin phi_h} per 4D bin, from f(phi_h) = A sin(phi_h), ndf = n_phi - 1.",
         f"file   : {data.path} | {data.stamp()}",
         f"config : {cfg.cuts_path} sha256={cfg.cuts_sha256}",
-        f"beam polarization P = {args.polarization or cfg.bsa.polarization} "
-        f"+- {args.polarization_err if args.polarization_err is not None else cfg.bsa.polarization_err}",
+        (f"beam polarization: OVERRIDE P = {args.polarization} +- {args.polarization_err} for every bin"
+         if args.polarization is not None else
+         f"beam polarization: per bin, P_mean = count-weighted |P| over the "
+         f"{len(cfg.bsa.polarization_periods)} periods of cuts.json /bsa/polarization/periods"),
+        "A_LU = A_fit / P_mean; sA_LU includes P_err/P_mean (P_err is a fully-correlated scale "
+        "uncertainty, also given separately).",
         "A_LU IS DILUTION-CORRECTED (A_meas = A_true * S/(S+B)) where dilution_applied = 1.",
         "A_raw is the uncorrected fit parameter -- what the superseded analysis quoted.",
         "Railed fits are rejected in the producer (|A| at bound, sigma_A < floor, chi2/ndf > max).",

@@ -193,6 +193,7 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -744,6 +745,8 @@ struct PartitionPartial {
     std::vector<Ptb3dPartial> ptb;         ///< [bin3d * n_mgg + imgg]
     std::vector<std::int64_t> n_dis;       ///< [cell_a]
     std::vector<std::int64_t> bsa;         ///< dense BSA index (see the schema block)
+    std::vector<std::int64_t> bsa_pol;     ///< [bin4d * n_pol + period]: BSA entries per polarization period
+    std::map<int, long long> run_events;   ///< events read per run (polarization diagnostic)
     // x_F study: (z, x_F, m_gg) same- and mixed-event pair counts, for pairs in a
     // 4D analysis bin. Two z axes: a fine uniform one (xf_*) and Grid B's z bins
     // (xfb_*). Index = (iz * n_xf + ixf) * n_mgg + imgg.
@@ -764,14 +767,16 @@ struct PartitionPartial {
     long long n_bsa_filled{};
     long long n_hel_undef{};
     long long n_no_pool_bin{};
+    long long n_no_pol{};  ///< events whose run is in no polarization period (must end at 0)
 
-    PartitionPartial(int n4d, int n3d, int n_a, int n_mgg, int n_phi, int n_xfz, int n_zb, int n_xf)
+    PartitionPartial(int n4d, int n3d, int n_a, int n_mgg, int n_phi, int n_xfz, int n_zb, int n_xf, int n_pol)
         : spectra(static_cast<std::size_t>(n4d) * static_cast<std::size_t>(n_mgg)),
           ptb(static_cast<std::size_t>(n3d) * static_cast<std::size_t>(n_mgg)),
           n_dis(static_cast<std::size_t>(n_a), 0),
           bsa(static_cast<std::size_t>(n4d) * static_cast<std::size_t>(n_mgg) *
                   static_cast<std::size_t>(n_phi) * 2u,
               0),
+          bsa_pol(static_cast<std::size_t>(n4d) * static_cast<std::size_t>(n_pol), 0),
           xf_same(static_cast<std::size_t>(n_xfz) * static_cast<std::size_t>(n_xf) * static_cast<std::size_t>(n_mgg), 0),
           xf_mixed(xf_same.size(), 0),
           xfb_same(static_cast<std::size_t>(n_zb) * static_cast<std::size_t>(n_xf) * static_cast<std::size_t>(n_mgg), 0),
@@ -785,6 +790,8 @@ struct PartitionPartial {
         for (std::size_t i = 0; i < ptb.size(); ++i) ptb[i].merge(o.ptb[i]);
         for (std::size_t i = 0; i < n_dis.size(); ++i) n_dis[i] += o.n_dis[i];
         for (std::size_t i = 0; i < bsa.size(); ++i) bsa[i] += o.bsa[i];
+        for (std::size_t i = 0; i < bsa_pol.size(); ++i) bsa_pol[i] += o.bsa_pol[i];
+        for (const auto& [run, n] : o.run_events) run_events[run] += n;
         for (std::size_t i = 0; i < xf_same.size(); ++i) xf_same[i] += o.xf_same[i];
         for (std::size_t i = 0; i < xf_mixed.size(); ++i) xf_mixed[i] += o.xf_mixed[i];
         for (std::size_t i = 0; i < xfb_same.size(); ++i) xfb_same[i] += o.xfb_same[i];
@@ -802,6 +809,7 @@ struct PartitionPartial {
         n_bsa_filled += o.n_bsa_filled;
         n_hel_undef += o.n_hel_undef;
         n_no_pool_bin += o.n_no_pool_bin;
+        n_no_pol += o.n_no_pol;
     }
 };
 
@@ -831,6 +839,7 @@ int main(int argc, char* argv[]) {
 
         const int n_mgg = mgg_axis.nbins();
         const int n_phi = phi_axis.nbins();
+        const int n_pol = static_cast<int>(cuts.bsa.polarization.size());  // beam-polarization periods
         const int n4d = binning.n4d();
         const int n3d = binning.n3d();
         const int n_a = binning.A.ncells();
@@ -870,6 +879,23 @@ int main(int argc, char* argv[]) {
         }
         pi0::stageB::order_canonically(chain);
         pi0::stageB::validate_chain(chain, args.allow_truncated_inputs);
+
+        // Beam polarization: every run must lie in a polarization period of
+        // cuts.json /bsa/polarization/periods. Refused up front, so no run is ever
+        // given a guessed polarization. (Checked again per event below.)
+        for (const std::string& rs : pi0::stageB::distinct_values(chain, "run")) {
+            int run = -1;
+            try {
+                run = std::stoi(rs);
+            } catch (...) {
+                throw std::runtime_error("input provenance carries a non-integer run '" + rs + "'");
+            }
+            if (cuts.polarization_period(run) < 0) {
+                throw std::runtime_error("run " + rs + " is in no beam-polarization period of " + args.config +
+                                         " /bsa/polarization/periods. A_LU needs each run's measured polarization; "
+                                         "add the period, do not guess one.");
+            }
+        }
 
         // The paths in canonical order. Each pass-1 partition builds a TChain from
         // this, and a TChain reads its files in add-order -- so both passes see one
@@ -1069,6 +1095,7 @@ int main(int argc, char* argv[]) {
             TTreeReaderValue<double> r_ez(reader, "ez");
             TTreeReaderValue<double> r_ee(reader, "ee");
             TTreeReaderValue<int> r_hel(reader, "helicity");
+            TTreeReaderValue<int> r_run(reader, "run");
             TTreeReaderArray<double> r_gpx(reader, "gpx");
             TTreeReaderArray<double> r_gpy(reader, "gpy");
             TTreeReaderArray<double> r_gpz(reader, "gpz");
@@ -1081,12 +1108,21 @@ int main(int argc, char* argv[]) {
             // Grid A's second axis is x_B (default) or nu (comparison binning, e.g. the
             // CLAS6 pi0 (Q2, nu) bins). Binning::load accepts only those two names.
             const bool a_is_nu = (binning.A.y.name == "nu");
+            int pol_run = std::numeric_limits<int>::min(), pol_idx = -1;  // cache: runs come in blocks
 
             while (reader.Next()) {
                 progress.add();
 
                 const double q2 = *r_q2, xb = *r_xb, nu = *r_nu, w = *r_w, y = *r_y;
                 const double a_y = a_is_nu ? nu : xb;  // Grid A second-axis value
+
+                // Beam polarization period of this event's run (cuts.json /bsa/polarization).
+                if (*r_run != pol_run) {
+                    pol_run = *r_run;
+                    pol_idx = cuts.polarization_period(pol_run);
+                }
+                ++out.run_events[pol_run];
+                if (pol_idx < 0) ++out.n_no_pol;
                 const double ex = *r_ex, ey = *r_ey, ez = *r_ez, ee = *r_ee;
                 const int helicity = *r_hel;
                 // Copy the four photon columns into RVecs so build_photons() -- THE
@@ -1197,6 +1233,10 @@ int main(int argc, char* argv[]) {
                                 ihel;
                             ++out.bsa[idx];
                             ++out.n_bsa_filled;
+                            if (pol_idx >= 0) {
+                                ++out.bsa_pol[static_cast<std::size_t>(bin4d) * static_cast<std::size_t>(n_pol) +
+                                              static_cast<std::size_t>(pol_idx)];
+                            }
                         }
                     }
                 }
@@ -1290,14 +1330,14 @@ int main(int argc, char* argv[]) {
         //   * `total` sees partition 0, then 1, then 2, ... in strict index order
         //     across every wave, which is what makes the compensated sums
         //     bit-identical to the single-partition (and hence single-thread) run.
-        PartitionPartial total(n4d, n3d, n_a, n_mgg, n_phi, n_xfz, n_zb, n_xf);
+        PartitionPartial total(n4d, n3d, n_a, n_mgg, n_phi, n_xfz, n_zb, n_xf, n_pol);
         for (std::size_t wave_start = 0; wave_start < n_part; wave_start += lanes) {
             const std::size_t wave_end = std::min<std::size_t>(wave_start + lanes, n_part);
             const std::size_t wcount = wave_end - wave_start;
 
             std::vector<PartitionPartial> partials;
             partials.reserve(wcount);
-            for (std::size_t k = 0; k < wcount; ++k) partials.emplace_back(n4d, n3d, n_a, n_mgg, n_phi, n_xfz, n_zb, n_xf);
+            for (std::size_t k = 0; k < wcount; ++k) partials.emplace_back(n4d, n3d, n_a, n_mgg, n_phi, n_xfz, n_zb, n_xf, n_pol);
 
             // A worker's throw must not cross the thread boundary; capture it and
             // rethrow on this thread after the join.
@@ -1375,6 +1415,13 @@ int main(int argc, char* argv[]) {
         const long long n_bsa_filled = total.n_bsa_filled;
         const long long n_hel_undef = total.n_hel_undef;
         const long long n_no_pool_bin = total.n_no_pool_bin;
+        if (total.n_no_pol != 0) {
+            throw std::runtime_error(std::to_string(total.n_no_pol) +
+                                     " events belong to runs in no beam-polarization period of " + args.config +
+                                     " /bsa/polarization/periods. Refusing to write a BSA without their polarization.");
+        }
+        const std::vector<std::int64_t> bsa_pol = std::move(total.bsa_pol);
+        const std::map<int, long long> run_events = std::move(total.run_events);
 
         // ---- consistency checks ---------------------------------------------
         // Cheap, so checked rather than assumed. A wrong number here is worse than
@@ -1574,6 +1621,53 @@ int main(int argc, char* argv[]) {
             t->Write();
         }
 
+        // --- bsa_pol: BSA entries per (4D bin, polarization period) ------------
+        // What pi0.bsa needs to divide each bin by the polarization of the runs
+        // actually in it: <|P|>_bin = sum_k counts_k |P_k| / sum_k counts_k, with
+        // |P_k| from cuts.json /bsa/polarization/periods[k]. SPARSE like `bsa`.
+        {
+            int b_bin4d = 0, b_period = 0;
+            std::int64_t b_counts = 0;
+            auto* t = new TTree("bsa_pol",
+                                "BSA entries (helicity +-1, all m_gg and phi_h bins) per (4D bin, beam-polarization "
+                                "period). period indexes cuts.json /bsa/polarization/periods. SPARSE.");
+            t->Branch("bin4d", &b_bin4d, "bin4d/I");
+            t->Branch("period", &b_period, "period/I");
+            t->Branch("counts", &b_counts, "counts/L");
+            for (int b = 0; b < n4d; ++b) {
+                for (int k = 0; k < n_pol; ++k) {
+                    const std::int64_t v = bsa_pol[static_cast<std::size_t>(b) * static_cast<std::size_t>(n_pol) +
+                                                   static_cast<std::size_t>(k)];
+                    if (v == 0) continue;
+                    b_bin4d = b;
+                    b_period = k;
+                    b_counts = v;
+                    t->Fill();
+                }
+            }
+            t->Write();
+        }
+
+        // --- runs: events read per run, with its polarization period -----------
+        {
+            int b_run = 0, b_period = 0;
+            std::int64_t b_events = 0;
+            double b_p = 0.0;
+            auto* t = new TTree("runs", "Events read per run, with the run's beam-polarization period and |P|");
+            t->Branch("run", &b_run, "run/I");
+            t->Branch("period", &b_period, "period/I");
+            t->Branch("P", &b_p, "P/D");
+            t->Branch("events", &b_events, "events/L");
+            for (const auto& [run, n] : run_events) {
+                b_run = run;
+                b_period = cuts.polarization_period(run);
+                b_p = b_period >= 0 ? cuts.bsa.polarization[static_cast<std::size_t>(b_period)].p : 0.0;
+                b_events = n;
+                t->Fill();
+            }
+            t->Write();
+        }
+
         // --- xf_z / xf_zb: per (z bin, x_F bin, m_gg bin) --------------------
         // x_F study. Same- and mixed-event pair counts for pairs in a 4D analysis
         // bin, so the background can be subtracted per (z, x_F) cell exactly as
@@ -1734,6 +1828,19 @@ int main(int argc, char* argv[]) {
         prov.add("xf_axis", "90 uniform bins over [-3, 1.5]; x_F = p_L*/p_L,max* in the gamma*-proton CM frame, "
                             "p_L,max* from e p -> e' pi0 p at the event's W (core/Kinematics.cpp)");
         prov.add("xf_z_axis", "50 uniform bins over [0, 1] (tree xf_z); tree xf_zb uses Grid B's z edges");
+        {
+            std::ostringstream os;
+            for (std::size_t k = 0; k < cuts.bsa.polarization.size(); ++k) {
+                const pi0::PolarizationPeriod& pp = cuts.bsa.polarization[k];
+                os << (k ? "; " : "") << k << ": runs " << pp.run_min << "-" << pp.run_max << " |P|=" << pp.p
+                   << "+-" << pp.p_err << " HWP " << pp.hwp << " logbook " << pp.logbook;
+            }
+            prov.add("bsa.polarization_periods", os.str());
+            prov.add("bsa.polarization_rule",
+                     "each run takes the |P| of the Moller measurement of its period (cuts.json "
+                     "/bsa/polarization/periods), no run-period average; |P| because REC::Event.helicity is "
+                     "HWP-corrected. Tree bsa_pol: BSA entries per (bin4d, period); tree runs: events per run.");
+        }
         prov.add("phi_h_axis", std::to_string(cuts.bsa.n_phi_bins) + " uniform bins over [" +
                                    fmt(cuts.bsa.phi_min_deg) + ", " + fmt(cuts.bsa.phi_max_deg) +
                                    "] DEGREES, Trento convention, from cuts.json /bsa");
@@ -1941,6 +2048,26 @@ int main(int argc, char* argv[]) {
                   << "  events with no pool bin        : " << n_no_pool_bin << '\n'
                   << "\n  bsa rows written (sparse)      : " << bsa_rows << " of "
                   << (static_cast<long long>(n4d) * n_mgg * n_phi * 2) << " dense cells\n";
+
+        {
+            // Beam polarization: events and BSA entries per period.
+            std::vector<long long> ev(static_cast<std::size_t>(n_pol), 0), en(static_cast<std::size_t>(n_pol), 0);
+            for (const auto& [run, n] : run_events) {
+                const int k = cuts.polarization_period(run);
+                if (k >= 0) ev[static_cast<std::size_t>(k)] += n;
+            }
+            for (int b = 0; b < n4d; ++b)
+                for (int k = 0; k < n_pol; ++k)
+                    en[static_cast<std::size_t>(k)] +=
+                        bsa_pol[static_cast<std::size_t>(b) * static_cast<std::size_t>(n_pol) + static_cast<std::size_t>(k)];
+            std::cout << "\n  beam polarization per period (cuts.json /bsa/polarization/periods):\n";
+            for (int k = 0; k < n_pol; ++k) {
+                const pi0::PolarizationPeriod& pp = cuts.bsa.polarization[static_cast<std::size_t>(k)];
+                std::cout << "    " << k << "  runs " << pp.run_min << "-" << pp.run_max << "  |P| = " << pp.p << " +- "
+                          << pp.p_err << "  HWP " << pp.hwp << "   events " << ev[static_cast<std::size_t>(k)]
+                          << "   BSA entries " << en[static_cast<std::size_t>(k)] << '\n';
+            }
+        }
 
         std::cout << "\nprovenance written to " << args.output << ":/provenance\n" << prov.as_text();
         return 0;

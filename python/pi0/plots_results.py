@@ -28,7 +28,6 @@ import numpy as np
 
 #: (file/provenance target, mass number A, plot label). C, Cu, Sn -- ratioed to LD2.
 TARGETS = [("CxC", 12.0, "C"), ("Cu", 63.5, "Cu"), ("Sn", 118.7, "Sn")]
-N_Z = 5
 COLORS = {"CxC": "#1f77b4", "Cu": "#d62728", "Sn": "#2ca02c"}
 
 
@@ -59,7 +58,7 @@ def _wmean(val: np.ndarray, err: np.ndarray) -> tuple[float, float]:
 def _by_z(d: dict[str, np.ndarray], val: str, err: str, zc: np.ndarray) -> np.ndarray:
     """Per z-bin (<z>, weighted mean, error), dropping empty bins."""
     out = []
-    for k in range(N_Z):
+    for k in range(len(zc)):
         m = d["i_z"] == k
         mean, e = _wmean(d[val][m], d[err][m])
         if np.isfinite(mean) and np.isfinite(zc[k]):
@@ -87,8 +86,10 @@ def main(argv: list[str] | None = None) -> int:
     broad = {t: _load(args.results / f"broadening_{t}.csv") for t, _, _ in TARGETS}
 
     # Representative <z> per z bin, from the ratio table's sideband-subtracted z_mean.
+    # The number of z bins is read from the tables (it follows Grid B), not fixed.
+    n_z = int(max(np.max(tab["i_z"]) for tabs in (ratio, broad) for tab in tabs.values() if len(tab["i_z"]))) + 1
     with np.errstate(invalid="ignore"):
-        zc = {t: np.array([np.nanmean(ratio[t]["z_mean"][ratio[t]["i_z"] == k]) for k in range(N_Z)])
+        zc = {t: np.array([np.nanmean(ratio[t]["z_mean"][ratio[t]["i_z"] == k]) for k in range(n_z)])
               for t, _, _ in TARGETS}
 
     def stamp(fig: "plt.Figure") -> None:

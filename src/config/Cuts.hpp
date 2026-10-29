@@ -18,12 +18,31 @@
 /// Units: energies and momenta in GeV, angles in DEGREES, distances in cm.
 
 #include <string>
+#include <vector>
 
 #include "core/Pairing.hpp"
 #include "stageB_bin/PoolGrid.hpp"
 #include "vertex/VzCorrector.hpp"
 
 namespace pi0 {
+
+/// One beam-polarization period: a Moller measurement and the runs it applies to.
+///
+/// Per the RG-D analysis wiki (Run Info tab) and the LE note of 11/14/24: each
+/// measured polarization applies to every run from its own run up to the run
+/// before the next measurement. It is NOT averaged over the run period.
+///
+/// `p` is the MAGNITUDE |P|, as a fraction. The sign the wiki gives for HWP IN
+/// is already contained in REC::Event.helicity, which Stage A reads and which is
+/// HWP-corrected; using the signed value would flip the asymmetry a second time.
+struct PolarizationPeriod {
+    int run_min{};         ///< first run, inclusive
+    int run_max{};         ///< last run, inclusive
+    double p{};            ///< |P|, fraction in (0, 1]
+    double p_err{};        ///< uncertainty on |P|, fraction
+    std::string hwp;       ///< "IN" or "OUT" -- information only (the helicity is HWP-corrected)
+    long long logbook{};   ///< logbook entry of the Moller measurement
+};
 
 /// Every cut value in the analysis, as loaded from config/cuts.json.
 ///
@@ -158,6 +177,9 @@ struct Cuts {
         int n_phi_bins{};       ///< uniform bins over [phi_min_deg, phi_max_deg]. 12 as shipped.
         double phi_min_deg{};   ///< -180
         double phi_max_deg{};   ///< +180
+        /// Beam polarization per run period, from /bsa/polarization/periods.
+        /// Sorted, contiguous, non-overlapping -- Cuts::load refuses anything else.
+        std::vector<PolarizationPeriod> polarization;
     } bsa;
 
     /// The event-mixing block, from /mixing. Defined in stageB_bin/PoolGrid.hpp
@@ -202,6 +224,10 @@ struct Cuts {
     ///         core/Constants.hpp about a physics constant. There is no partial
     ///         success and no defaulting: you get every value or an exception.
     [[nodiscard]] static Cuts load(const std::string& json_path);
+
+    /// Index into bsa.polarization of the period that contains `run`, or -1 if
+    /// no period does. Callers must treat -1 as an error, never as "unpolarized".
+    [[nodiscard]] int polarization_period(int run) const;
 };
 
 }  // namespace pi0
