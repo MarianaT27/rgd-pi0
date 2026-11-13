@@ -3,6 +3,19 @@
 One entry per patch, newest first. The version is the one in `meson.build` and
 `python/pi0/__init__.py`, and the git tag of the commit that applies the patch.
 
+## v0.2.5 (2026-11-13), patch `v0.2.5.patch`
+
+Applies on top of v0.2.4. Test-only: no code, grid or config change, nothing to rerun.
+
+### Fixed: `tests/test_binning.cpp` follows the v0.2.2 Grid A
+- The binning test had failed since v0.2.2, which remade Grid A (Q^2 edge pinned at 2.0) without updating it.
+- "the shipped grids have the geometry the note specifies": the Grid A Q^2 and x_B edges are now the ones in
+  `config/binning/grid_A_q2_xb.json`.
+- "an edge literal too large for a double": the Q^2 edge it overwrites with `1e999` is now `1.0883105529903487`
+  (was `1.1036395052848946`, an edge of the v0.2.1 Grid A that no longer exists in the file).
+- Comments quoting the bin boxes of Q^2 = 2.5 and x_B = 0.25 updated; the bin indices they check are unchanged.
+- Version 0.2.5 in `meson.build` and `python/pi0/__init__.py`.
+
 ## v0.2.4 (2026-11-13), patch `v0.2.4.patch`
 
 Applies on top of v0.2.3. Nothing in the production changes: without the new flag Stage B behaves

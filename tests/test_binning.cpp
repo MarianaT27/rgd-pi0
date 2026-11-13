@@ -252,10 +252,10 @@ TEST_CASE("the shipped grids have the geometry the note specifies", "[binning]")
     // disagree with it, IT WINS and this test is what changes -- but a
     // disagreement means someone moved a bin edge, and that must be a
     // deliberate act, which is exactly why these assertions force it.
-    // Grid A: make_grid equal-statistics edges. Grid B: hand-chosen, the CLAS6 pi0
+    // Grid A: make_grid equal-statistics edges (v0.2.2, Q2 edge pinned at 2.0). Grid B: hand-chosen, the CLAS6 pi0
     // edges (Mineeva et al., arXiv:2406.04513) plus bins outside their region.
-    CHECK(b.A.x.edges == std::vector<double>{1.000000001553369, 1.1036395052848946, 1.2274615100761013, 1.3796989494979235, 1.5737701447250996, 1.8357110485458725, 2.225254915566152, 2.9333272227860725, 10.383576123259907});
-    CHECK(b.A.y.edges == std::vector<double>{0.06104468350371436, 0.09485387000230364, 0.11761977644765222, 0.14212794099210188, 0.1715709978794819, 0.21078880298901825, 0.2730911087005842, 0.7685063303656742});
+    CHECK(b.A.x.edges == std::vector<double>{1.000000000388928, 1.0883105529903487, 1.1935242502870034, 1.322870607021428, 1.4885105679928918, 1.7129932335785671, 2.0, 2.674332090406197, 10.594624540848066});
+    CHECK(b.A.y.edges == std::vector<double>{0.06097453809068277, 0.10043186674229546, 0.12842440291554036, 0.15805019416070004, 0.1916930714145738, 0.23196756397831797, 0.28973249435296916, 0.7681692744461818});
     CHECK(b.B.x.edges == std::vector<double>{0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 1.0});
     CHECK(b.B.y.edges == std::vector<double>{0.0, 0.1, 0.25, 0.4, 0.55, 0.75, 1.5, 10.0});
 }
@@ -280,8 +280,8 @@ TEST_CASE("Binning::find_4d composes A and B with the B cell fast", "[binning]")
     const int n_pt2 = b.B.y.nbins();
 
     // Per-axis indices, read off the edge arrays in config/binning/*.json:
-    //   Q2  = 2.5  -> i_q2  = 6, box [2.225, 2.933)
-    //   xB  = 0.25 -> i_xb  = 5, box [0.2108, 0.2731)
+    //   Q2  = 2.5  -> i_q2  = 6, box [2.0, 2.674)
+    //   xB  = 0.25 -> i_xb  = 5, box [0.2320, 0.2897)
     //   z   = 0.45 -> i_z   = 4, box [0.4, 0.5)
     //   pT2 = 0.3  -> i_pt2 = 2, box [0.25, 0.4)
     const int expect = ((6 * n_xb) + 5) * (n_z * n_pt2) + (4 * n_pt2) + 2;
@@ -405,7 +405,7 @@ TEST_CASE("Binning::find_3d is the A cell times the z bin", "[binning]") {
     CHECK(b.find_3d(1.05, 0.07, 0.05) == 0);
 
     // Formula re-derived locally: bin3d = ((i_q2 * n_xb) + i_xb) * n_z + i_z.
-    // Q2 = 2.5 -> i_q2 = 6; xB = 0.25 -> i_xb = 5 (box [0.2108, 0.2731));
+    // Q2 = 2.5 -> i_q2 = 6; xB = 0.25 -> i_xb = 5 (box [0.2320, 0.2897));
     // z = 0.45 -> i_z = 4.
     CHECK(((6 * n_xb) + 5) * n_z + 4 == 427);  // pin the arithmetic too
     CHECK(b.find_3d(2.5, 0.25, 0.45) == ((6 * n_xb) + 5) * n_z + 4);
@@ -581,7 +581,7 @@ TEST_CASE("Binning::load throws on NON-MONOTONIC edges", "[binning]") {
         // caller following the header had no type to catch and the process
         // would die unhandled while trying to report a bad grid.
         std::string raw = parsed(grid_a_path()).dump(2);
-        const std::string needle = "1.1036395052848946,";  // a Grid A Q2 edge
+        const std::string needle = "1.0883105529903487,";  // a Grid A Q2 edge (v0.2.2)
         const std::size_t at = raw.find(needle);
         REQUIRE(at != std::string::npos);
         raw.replace(at, needle.size() - 1, "1e999");
