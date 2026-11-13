@@ -33,6 +33,7 @@ __all__ = [
     "Blocker",
     "check_provenance",
     "load",
+    "preliminary_label",
 ]
 
 
@@ -297,6 +298,9 @@ def _read_stage_a(f: uproot.ReadOnlyDirectory) -> Provenance:
     )
     if truncated is not None:
         merged["events.max_events_requested"] = truncated.require("events.max_events_requested")
+    # Every Stage A code version among the inputs (v0.2.3), for the Preliminary label.
+    versions = sorted({(b.get("stageA_skim.code_version") or "").strip() for b in blocks} - {""})
+    merged["stageA_skim.code_versions"] = ", ".join(versions)
 
     return Provenance(directory=f"provenance_stageA_[{len(names)} input(s)]", entries=merged)
 
@@ -446,13 +450,13 @@ def load(
                 raise ProvenanceError(
                     f"{path} carries {len(fatal)} fatal provenance blocker(s); refusing to "
                     f"produce physics from it. Pass allow_unpublishable=True (or "
-                    f"--allow-unpublishable) to proceed anyway for QA -- the results are then "
-                    f"DIAGNOSTIC ONLY and must not be quoted."
+                    f"--allow-unpublishable) to proceed anyway -- the results are then labelled "
+                    f"Preliminary, with the blockers listed above."
                 )
             if fatal:
                 print(
                     "PROCEEDING ANYWAY because allow_unpublishable=True.\n"
-                    "EVERY NUMBER BELOW IS DIAGNOSTIC ONLY AND MUST NOT BE QUOTED.\n"
+                    "EVERY NUMBER BELOW IS PRELIMINARY (blockers listed above).\n"
                     + "=" * 78 + "\n",
                     file=stream,
                 )
@@ -570,3 +574,24 @@ def load(
         )
 
     return data
+
+
+def preliminary_label(*datas: "StageBData") -> str:
+    """The label on every figure, CSV and log line made from blocked data (v0.2.3).
+
+    ``Preliminary (v0.2.1, RG-A photon ID)``: the Stage A version(s) that made the
+    slims, then ``RG-A photon ID`` if any input was scored by the RG-A GBT
+    fallback. It replaces the old "DIAGNOSTIC ONLY / DO NOT QUOTE" wording; the
+    provenance checks and the blocker list behind it are unchanged.
+    """
+    versions: set[str] = set()
+    rga = False
+    for d in datas:
+        a = d.prov_stage_a
+        v = a.get("stageA_skim.code_versions") or a.get("stageA_skim.code_version") or ""
+        versions |= {x.strip() for x in v.split(",") if x.strip()}
+        rga = rga or _tripped(a, "gbt.fallback_used")
+    bits = [", ".join(f"v{v.lstrip('v')}" for v in sorted(versions))] if versions else []
+    if rga:
+        bits.append("RG-A photon ID")
+    return f"Preliminary ({', '.join(bits)})" if bits else "Preliminary"

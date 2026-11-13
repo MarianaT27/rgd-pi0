@@ -41,13 +41,14 @@ SAMPLES = {
     "full":  {"dir": "analysis/full",  "results": "results_full", "bsa": "analysis/full/results_full/bsa_{t}.csv",
               "label": "full sample"},
     "binning_v2": {"dir": "analysis/binning_v2", "results": "results_full", "bsa": "analysis/binning_v2/results_full/bsa_{t}.csv", "label": "full sample, binning v2"},
+    "v021": {"dir": "analysis/v021", "results": "results_full", "bsa": "analysis/v021/results_full/bsa_{t}.csv", "label": "v0.2.1"},
 }
 TARGETS = ["LD2", "CxC", "Cu", "Sn"]
 LABELS = {"LD2": "D", "CxC": "C", "Cu": "Cu", "Sn": "Sn"}
 COLORS = {"LD2": "black", "CxC": "#1f77b4", "Cu": "#d62728", "Sn": "#2ca02c"}
 
 if len(sys.argv) != 2 or sys.argv[1] not in SAMPLES:
-    sys.exit("usage: python3 analysis/scripts/bsa.py <diag3|full>")
+    sys.exit(f"usage: python3 analysis/scripts/bsa.py <{'|'.join(SAMPLES)}>")
 S = sys.argv[1]
 if SAMPLES[S]["bsa"] is None:
     sys.exit(f"no BSA csv files exist for sample {S} (pi0.bsa was not run on it)")
@@ -106,7 +107,7 @@ for i, t in enumerate(TARGETS):
 ax1.axhline(0, color="gray", lw=0.8, ls="--")
 ax1.set_ylabel(r"$A_{LU}^{\sin\phi_h}$")
 ax1.legend(frameon=False, ncol=4)
-ax1.text(0.02, 0.95, f"DIAGNOSTIC ({SAMPLES[S]['label']}, RG-A photon ID)", transform=ax1.transAxes,
+ax1.text(0.02, 0.95, f"Preliminary ({SAMPLES[S]['label']}, RG-A photon ID)", transform=ax1.transAxes,
          va="top", fontsize=8, color="gray")
 mD, eD = res["LD2"]
 for i, t in enumerate(["CxC", "Cu", "Sn"]):

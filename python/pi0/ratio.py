@@ -209,7 +209,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--allow-unpublishable",
         action="store_true",
-        help="proceed despite fatal provenance blockers. Output is DIAGNOSTIC ONLY.",
+        help="proceed despite fatal provenance blockers. Output is labelled Preliminary.",
     )
     args = p.parse_args(argv)
 
@@ -245,7 +245,7 @@ def main(argv: list[str] | None = None) -> int:
         "correlation between targets through the shared LD2 columns (matters for A-dependence).",
     ]
     if da.blockers or dd.blockers:
-        header.insert(0, "*** DIAGNOSTIC ONLY -- provenance blockers present, DO NOT QUOTE ***")
+        header.insert(0, f"*** {io.preliminary_label(da, dd)} -- provenance blockers present, see the prov lines ***")
     write_csv(table, args.out, header)
     print(f"wrote {len(table)} rows to {args.out}")
     return 0

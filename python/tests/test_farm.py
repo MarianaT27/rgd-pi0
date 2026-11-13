@@ -767,3 +767,61 @@ def test_wrapper_log_txt_captures_a_failure_and_keeps_the_exit_code(tmp_path):
     assert r.returncode == 3, "tee must not swallow the failure"
     body = (job / "log.txt").read_text()
     assert "boom" in body and "allow_rga_fallback" in body
+
+
+# ---------------------------------------------------------------------------
+# skip_foreign_run_runs (v0.2.3): drop the events of another run, keep the run
+# ---------------------------------------------------------------------------
+
+
+def test_skip_foreign_run_is_off_by_default(tmp_path):
+    cfg = load_farm_config(_cfg(tmp_path))
+    assert cfg.skip_foreign_run_runs == frozenset()
+    w = stagea_wrapper(cfg, ["input_0.hipo"], "./stageA", run=18540)
+    assert "--skip-foreign-run" not in w
+    assert "--run " not in w
+
+
+def test_skip_foreign_run_only_for_the_listed_run(tmp_path):
+    cfg = load_farm_config(_cfg(tmp_path, skip_foreign_run_runs=[18540]))
+    w = stagea_wrapper(cfg, ["input_0.hipo"], "./stageA", run=18540)
+    assert "--skip-foreign-run --run 18540" in w
+    other = stagea_wrapper(cfg, ["input_0.hipo"], "./stageA", run=18419)
+    assert "--skip-foreign-run" not in other
+    assert "--run " not in other
+    p = tmp_path / "w.sh"
+    p.write_text(w)
+    assert subprocess.run(["bash", "-n", str(p)]).returncode == 0
+
+
+def test_skip_foreign_run_needs_the_run_of_the_chunk(tmp_path):
+    """Without the chunk's run the wrapper cannot know which run to keep, so it adds nothing."""
+    cfg = load_farm_config(_cfg(tmp_path, skip_foreign_run_runs=[18540]))
+    assert "--skip-foreign-run" not in stagea_wrapper(cfg, ["input_0.hipo"], "./stageA")
+
+
+def test_skip_foreign_run_and_max_events_combine(tmp_path):
+    cfg = load_farm_config(_cfg(tmp_path, skip_foreign_run_runs=[18540]))
+    w = stagea_wrapper(cfg, ["input_0.hipo"], "./stageA", max_events=100, run=18540)
+    assert "--max-events 100 --skip-foreign-run --run 18540" in w
+
+
+def test_skip_foreign_run_refuses_non_integers(tmp_path):
+    with pytest.raises(FarmConfigError, match="skip_foreign_run_runs"):
+        load_farm_config(_cfg(tmp_path, skip_foreign_run_runs=["18540"]))
+    with pytest.raises(FarmConfigError, match="skip_foreign_run_runs"):
+        load_farm_config(_cfg(tmp_path, skip_foreign_run_runs=18540))
+
+
+def test_a_run_cannot_be_both_excluded_and_kept(tmp_path):
+    with pytest.raises(FarmConfigError, match="both exclude_runs and skip_foreign_run_runs"):
+        load_farm_config(_cfg(tmp_path, exclude_runs=[18540], skip_foreign_run_runs=[18540]))
+
+
+def test_v022_farm_configs_load_and_read_the_new_sidis_train():
+    for t in ("LD2", "CxC", "Cu", "Sn"):
+        cfg = load_farm_config(CONFIG_DIR / "farm" / "v022" / f"{t}.farm.json")
+        assert cfg.target == t
+        assert all("/dst/train/sidis/" in i for i in cfg.inputs)
+        assert "farm_v022" in cfg.output_dir
+        assert cfg.skip_foreign_run_runs == (frozenset({18540}) if t == "LD2" else frozenset())

@@ -1,4 +1,4 @@
-"""Summary figures for the diagnostic first run of the rewritten pipeline.
+"""Summary figures (R_A, Delta<pT2>) from the Stage C result CSVs.
 
 Reads the Stage C result CSVs (``pi0.ratio``, ``pi0.broadening``) and draws the
 three figures the note's results section shows:
@@ -7,8 +7,9 @@ three figures the note's results section shows:
 * ``results_dpt2_vs_A.pdf`` -- the A-dependence of the pT broadening,
 * ``results_dpt2_vs_z.pdf`` -- the broadening vs ``<z>`` per target.
 
-Each is stamped DIAGNOSTIC: the inputs carry the fallback + truncation
-blockers, so nothing here is a measurement. Only matplotlib is used (no
+Each is labelled with the "Preliminary (...)" line that pi0.ratio /
+pi0.broadening wrote at the top of the CSV when the inputs carry provenance
+blockers (RG-A photon-ID fallback, truncated input); no label if they carry none. Only matplotlib is used (no
 mplhep), so this runs anywhere the extraction stack does.
 
     python -m pi0.plots_results --results <dir> --outdir note/figures
@@ -36,6 +37,17 @@ def _tofloat(x: str) -> float:
         return float(x)
     except ValueError:
         return np.nan
+
+
+def _label(path: Path) -> str:
+    """The ``Preliminary (...)`` label from a result CSV's header, or "" if it has none."""
+    with path.open() as fh:
+        for line in fh:
+            if not line.startswith("#"):
+                break
+            if "Preliminary" in line:
+                return line.lstrip("# *").split(" -- ")[0].strip()
+    return ""
 
 
 def _load(path: Path) -> dict[str, np.ndarray]:
@@ -67,7 +79,7 @@ def _by_z(d: dict[str, np.ndarray], val: str, err: str, zc: np.ndarray) -> np.nd
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description="Diagnostic result figures (R_A, Delta<pT2>).")
+    p = argparse.ArgumentParser(description="Result figures (R_A, Delta<pT2>).")
     p.add_argument("--results", type=Path, required=True,
                    help="directory holding ratio_<T>.csv and broadening_<T>.csv")
     p.add_argument("--outdir", type=Path, required=True, help="output directory for the PDFs")
@@ -92,9 +104,14 @@ def main(argv: list[str] | None = None) -> int:
         zc = {t: np.array([np.nanmean(ratio[t]["z_mean"][ratio[t]["i_z"] == k]) for k in range(n_z)])
               for t, _, _ in TARGETS}
 
+    labels = sorted({_label(args.results / f"{kind}_{t}.csv") for t, _, _ in TARGETS
+                     for kind in ("ratio", "broadening")} - {""})
+    label = "; ".join(labels)
+    print(f"label: {label or '(none, inputs carry no provenance blockers)'}")
+
     def stamp(fig: "plt.Figure") -> None:
-        fig.text(0.5, 0.5, "DIAGNOSTIC — DO NOT QUOTE", ha="center", va="center",
-                 fontsize=20, color="0.85", rotation=28, zorder=-10, alpha=0.7)
+        if label:
+            fig.text(0.99, 0.01, label, ha="right", va="bottom", fontsize=8, color="0.4")
 
     # --- Fig 1: R_A vs <z> --------------------------------------------------
     fig, ax = plt.subplots(figsize=(5.4, 4.0))

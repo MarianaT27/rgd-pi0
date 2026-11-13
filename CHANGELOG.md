@@ -3,6 +3,55 @@
 One entry per patch, newest first. The version is the one in `meson.build` and
 `python/pi0/__init__.py`, and the git tag of the commit that applies the patch.
 
+## v0.2.3 (2026-11-13), patch `v0.2.3.patch`
+
+Applies on top of v0.2.2. **Stage B must be rerun** for anything binned with the v0.2.2 Grid B
+(see "Grid B restored"). Stage A does not need to be rerun.
+
+### Fixed: Grid B restored to the hand-chosen CLAS6 edges
+- `config/binning/grid_B_z_pt2.json` is again the v0.2.1 file: z = 0, 0.1, ..., 0.8, 1.0 and
+  p_T^2 = 0, 0.1, 0.25, 0.4, 0.55, 0.75, 1.5, 10 GeV^2 (the CLAS6 edges inside 0.3 < z < 1 and p_T^2 < 1.5).
+  v0.2.2 had committed by mistake the equal-statistics Grid B that `make_grid` wrote in `run_v021_chain.sh`.
+- `run_v021_chain.sh` and `run_full_chain.sh` no longer overwrite Grid B: `make_grid --out-b` now writes
+  `$OUT/grid_B_z_pt2_equal_stat.json`, which nothing reads. Grid A is still made by `make_grid` and pinned at
+  Q^2 = 2.0 by `pin_q2_edge.py`.
+- `clas6_compare.py` needs the CLAS6 edges in Grid B and stops with the v0.2.2 Grid B.
+
+### Changed: "DIAGNOSTIC" replaced by "Preliminary (<version>, RG-A photon ID)"
+- New `pi0.io.preliminary_label(...)`: `Preliminary (v0.2.1, RG-A photon ID)`, from the Stage A version(s)
+  of the inputs (`stageA_skim.code_version`, collected over every input into `stageA_skim.code_versions`)
+  and `RG-A photon ID` if any input used the RG-A GBT fallback.
+- Used in: the first header line of the `pi0.ratio`, `pi0.broadening` and `pi0.bsa` CSVs; the `pi0.qa`
+  figures (small label in the bottom-right corner instead of the diagonal watermark); the
+  `pi0.plots_results` figures (label read from the CSV header; no label if the inputs have no blockers);
+  the `pi0.io` provenance printout and error message; the `--allow-unpublishable` help texts.
+- Analysis scripts `ra.py`, `dpt2.py`, `bsa.py`, `bsa_grid.py`: `Preliminary (<sample label>, RG-A photon ID)`.
+  New sample `v021` (`analysis/v021`, the output of `run_v021_chain.sh`) with label `v0.2.1`.
+- Only the wording changed. The provenance checks, the blocker list and `--allow-unpublishable` are unchanged.
+
+### Added: farm configs for the new SIDIS train, `config/farm/v022/`
+- Inputs `/cache/clas12/rg-d/production/pass1/recon/<LD2|CxC|CuSn>/dst/train/sidis/` (one file per run,
+  prescaled 1 in 5 for Q^2 < 2.0), output `/volatile/clas12/mtenorio/pi0/rgd-pi0/farm_v022/<T>`,
+  workflows `mt_rgd_pi0_stageA_v022_<T>`. Resources as in v021.
+- New key `farm.skip_foreign_run_runs` (array of runs, default empty). Those runs are skimmed with
+  `stageA_skim --skip-foreign-run --run <run>`: events of any other run in the file are dropped, every event
+  of the run itself is kept. Every other run gets the same command line as before.
+  `config/farm/v022/LD2.farm.json` lists 18540 (its file holds events of run 18539).
+- `pi0.farm`: `FarmConfig.skip_foreign_run_runs`; a run in both `exclude_runs` and `skip_foreign_run_runs`
+  is refused; `stagea_wrapper(..., run=)`. `pi0.batch` passes the run of each chunk and prints the runs
+  that get the flag. Tests in `python/tests/test_farm.py`.
+
+### Added: (nu, Q^2) panel in `binning_grid_factorized.pdf`
+- `pi0.plots_kinematics` draws a third panel, nu vs Q^2 with the edges of `--nu-grid`
+  (default `config/binning/grid_A_q2_nu.json`, the CLAS6 comparison grid). Same events as Grid A.
+  nu is not a fourth variable: it is fixed by (Q^2, x_B), nu = Q^2 / (2 M x_B).
+
+### Changed: CLAS6 colours in `clas6_compare.py`
+- CLAS6 C is now navy `#0b2f5a` (was the same blue as RG-D C). Fe maroon and Pb dark green as before.
+  RG-D keeps the standard colours (C `#1f77b4`, Cu `#d62728`, Sn `#2ca02c`).
+
+- Version 0.2.3 in `meson.build` and `python/pi0/__init__.py`.
+
 ## v0.2.2 (2026-11-05), patch `v0.2.2.patch`
 
 Applies on top of v0.2.1. Nothing needs to be rerun: without the new flag Stage A behaves exactly as in v0.2.1.
@@ -21,6 +70,28 @@ Applies on top of v0.2.1. Nothing needs to be rerun: without the new flag Stage 
   - a `foreign run` line in the startup printout.
 - `events.input_tag0` still counts every event read, skipped ones included.
 - Version 0.2.2 in `meson.build` and `python/pi0/__init__.py`.
+
+### Not listed when v0.2.2 was released (added in v0.2.3)
+- **Grid A** (`config/binning/grid_A_q2_xb.json`) remade by `make_grid` from the 95 v0.2.1 slims
+  (`/work/clas12/mtenorio/pi0/stageA_v021/`), equal statistics, then the Q^2 edge nearest 2.0 (2.050) moved
+  to 2.0 by `pin_q2_edge.py`, so no Q^2 bin straddles the SIDIS-train prescale threshold.
+  Edges: Q^2 = 1.0, 1.088, 1.194, 1.323, 1.489, 1.713, 2.0, 2.674, 10.595 GeV^2;
+  x_B = 0.061, 0.100, 0.128, 0.158, 0.192, 0.232, 0.290, 0.768. Recorded in the file (`_q2_edge_pinned`).
+- **Grid B** (`config/binning/grid_B_z_pt2.json`) was ALSO overwritten by `make_grid`, with equal-statistics
+  edges (z = 0.046, ..., 1.0; p_T^2 = 0, 0.018, ..., 8.153). This was not intended; v0.2.3 restores the
+  CLAS6 grid of v0.2.1.
+- **Scripts** (`analysis/scripts/`):
+  - `run_v021_chain.sh`: stages B to D on the v0.2.1 slims (make_grid, pin_q2_edge, stageB_bin,
+    pi0.ratio/broadening/bsa/qa/plots_results), output in `analysis/v021/`.
+  - `run_wagon_compare.sh`, `compare_wagon_ra.py`: R_A with the LD2 of the SIDIS train vs the LD2 of the
+    RGDSidisWagon test (run 18431), on a test grid with a Q^2 edge at 2.0 (`make_grid_q2cut2.py`).
+  - `compare_wagon_train.py`, `compare_wagon_files.py`, `wagon_blocks.py`, `wagon_gaps.py`: wagon vs train
+    event by event (prescale rule, missing events per block of event numbers).
+  - `make_grid_q2cut2.py`: test copy of Grid A with the edge 1.836 moved to 2.0.
+  - `pin_q2_edge.py`: moves the Q^2 edge of a Grid A file nearest a value onto that value.
+- **Farm configs** `config/farm/v021/<T>.farm.json`: the v0.2.1 Stage A production
+  (`train/SIDIS/`, output `farm_v021`).
+- **`.gitignore`**: `/analysis/cmp_wagon/` and `/analysis/v021/`.
 
 ## v0.2.1 (2026-10-29), patch `v0.2.1.patch`
 

@@ -30,6 +30,7 @@ SAMPLES = {
     "full":  {"dir": "analysis/full",  "results": "results_full", "label": "full sample"},
     "ndis":  {"dir": "analysis/ndis",  "results": "results_full", "label": "full sample, inclusive N_DIS"},
     "binning_v2": {"dir": "analysis/binning_v2", "results": "results_full", "label": "full sample, binning v2"},
+    "v021": {"dir": "analysis/v021", "results": "results_full", "label": "v0.2.1"},
 }
 TARGETS = {"CxC": 12.011, "Cu": 63.546, "Sn": 118.71}
 LABELS = {"CxC": "C", "Cu": "Cu", "Sn": "Sn"}
@@ -100,7 +101,7 @@ for ax in axs[-1]:
 for ax in axs[:, 0]:
     ax.set_ylabel(r"$\Delta\langle p_T^2\rangle$ [GeV$^2$]")
 axs.flat[0].legend(frameon=False, fontsize=9, loc="upper left")
-fig.suptitle(f"DIAGNOSTIC ({SAMPLES[S]['label']}, RG-A photon ID); common bins, D-error weights; "
+fig.suptitle(f"Preliminary ({SAMPLES[S]['label']}, RG-A photon ID); common bins, D-error weights; "
              "dashed: line through the origin", fontsize=9, color="gray")
 fig.tight_layout()
 for ext in ("pdf", "png"):

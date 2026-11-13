@@ -329,6 +329,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"max events     : {args.max_events} PER FILE -- every output is a TRUNCATED PREFIX, "
               f"not a sample.\n                 Stamped into each output's provenance; Stage B refuses "
               f"such a file by default.")
+    if cfg.skip_foreign_run_runs:
+        listed = sorted(cfg.skip_foreign_run_runs)
+        here = [r for r in listed if r in runs_seen]
+        print(f"foreign runs   : --skip-foreign-run --run N for run(s) {here or 'none'} "
+              f"(events of other runs in those files are dropped, the rest kept)")
+        missing = [r for r in listed if r not in runs_seen]
+        if missing:
+            print(f"                 note: skip_foreign_run_runs lists {missing}, which have no input "
+                  f"file in this production; nothing to do for them.")
     print(f"output         : {cfg.output_dir}/<run>/<job>/slim_<i>.root")
     print(f"logs           : {cfg.log_dir}/<job>.log")
 
@@ -395,7 +404,8 @@ def main(argv: list[str] | None = None) -> int:
     for ch in chunks:
         job = f"{cfg.swif2.workflow}_{ch.name_suffix}"
         (scripts_dir / f"{job}.wrapper.sh").write_text(
-            stagea_wrapper(cfg, job_inputs(ch), exe_abs, max_events=args.max_events))
+            stagea_wrapper(cfg, job_inputs(ch), exe_abs, max_events=args.max_events,
+                           run=ch.files[0].run))
 
     script = swif2_script(cfg, chunks, scripts_dir=scripts_dir, exe=exe_abs, cuts_path=cuts_path)
     script_path = scripts_dir / f"{cfg.swif2.workflow}.swif2.sh"

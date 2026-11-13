@@ -230,6 +230,10 @@ class FarmConfig:
     swif2: Swif2Spec
     env: dict[str, str]
     source: Path
+    #: Runs skimmed with ``stageA_skim --skip-foreign-run --run <run>``: events of
+    #: any OTHER run found in that run's file are dropped, every event of the run
+    #: itself is kept. Empty = every run is skimmed exactly as before v0.2.3.
+    skip_foreign_run_runs: frozenset[int] = frozenset()
 
 
 def load_farm_config(path: str | Path) -> FarmConfig:
@@ -300,6 +304,19 @@ def load_farm_config(path: str | Path) -> FarmConfig:
     if not isinstance(env, dict):
         raise FarmConfigError(f"{where}/env: want an object of NAME -> value.")
 
+    exclude = frozenset(int(r) for r in farm.get("exclude_runs", []))
+    sfr = farm.get("skip_foreign_run_runs", [])
+    if not isinstance(sfr, list) or not all(isinstance(r, int) and not isinstance(r, bool) for r in sfr):
+        raise FarmConfigError(f"{where}/skip_foreign_run_runs: want an array of run numbers (integers).")
+    skip_foreign = frozenset(sfr)
+    both = sorted(skip_foreign & exclude)
+    if both:
+        raise FarmConfigError(
+            f"{where}: run(s) {both} are in both exclude_runs and skip_foreign_run_runs. "
+            f"exclude_runs drops the whole run; skip_foreign_run_runs keeps it and drops only the "
+            f"events of other runs. Say which one you mean."
+        )
+
     return FarmConfig(
         target=target,
         polarity=polarity,
@@ -307,10 +324,11 @@ def load_farm_config(path: str | Path) -> FarmConfig:
         output_dir=str(_require(farm, "output_dir", where)),
         log_dir=str(_require(farm, "log_dir", where)),
         files_per_job=fpj,
-        exclude_runs=frozenset(int(r) for r in farm.get("exclude_runs", [])),
+        exclude_runs=exclude,
         swif2=swif2,
         env={str(k): str(v) for k, v in env.items()},
         source=path,
+        skip_foreign_run_runs=skip_foreign,
     )
 
 
@@ -536,8 +554,15 @@ def stagea_wrapper(
     inputs: Sequence[str],
     exe: str,
     max_events: int | None = None,
+    run: int | None = None,
 ) -> str:
     """The per-job script SWIF2 runs on the node.
+
+    ``run`` is the run of the chunk (chunks never span runs). If it is in
+    ``cfg.skip_foreign_run_runs`` every skim of the job gets
+    ``--skip-foreign-run --run <run>``: events of another run in the file are
+    dropped and the rest of the run is kept (stageA_skim v0.2.2). Every other run
+    gets exactly the command line of v0.2.2.
 
     ``inputs`` is what the skim should open, in job order: either a staged name
     (``input_0.hipo``, relative to the job's scratch dir) for a tape input, or an
@@ -596,7 +621,9 @@ def stagea_wrapper(
         "    fi",
         f"    {_q(exe)} --input \"$in\" --output \"$out\" \\",
         f"        --config cuts.json --target {_q(cfg.target)}"
-        + (f" --max-events {int(max_events)}" if max_events else ""),
+        + (f" --max-events {int(max_events)}" if max_events else "")
+        + (f" --skip-foreign-run --run {int(run)}"
+           if run is not None and int(run) in cfg.skip_foreign_run_runs else ""),
         "    s=$?",
         '    if [[ $s -ne 0 ]]; then',
         '        echo "stageA_skim FAILED on $in with exit $s" >&2',

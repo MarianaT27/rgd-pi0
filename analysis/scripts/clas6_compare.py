@@ -64,9 +64,10 @@ OURS = ["CxC", "Cu", "Sn"]
 THEIRS = {"CxC": "C", "Cu": "Fe", "Sn": "Pb"}          # drawn side by side
 LABEL = {"CxC": "C", "Cu": "Cu", "Sn": "Sn"}
 COLOR = {"CxC": "#1f77b4", "Cu": "#d62728", "Sn": "#2ca02c"}   # standard RG-D target colours
-# CLAS6 nuclei: same colour for the same nucleus (C), a darker shade of the nearest RG-D
-# nucleus otherwise (Fe A=56 next to Cu A=63, Pb A=208 next to Sn A=119). Open markers.
-THEIR_COLOR = {"CxC": "#1f77b4", "Cu": "maroon", "Sn": "darkgreen"}
+# CLAS6 nuclei: a darker shade of the RG-D colour drawn next to it, so no colour is shared
+# with RG-D (v0.2.3; C used to be the same blue): C navy next to our C blue, Fe (A=56) maroon
+# next to Cu (A=63) red, Pb (A=208) dark green next to Sn (A=119) green. Open squares.
+THEIR_COLOR = {"CxC": "#0b2f5a", "Cu": "maroon", "Sn": "darkgreen"}
 Q2_RANGE = (1.0, 4.1)       # set 1 integrates Q2 over their full range
 PT2_RANGE = (0.0, 1.5)      # set 2 integrates pT2 over their full range
 EPS = 1e-6

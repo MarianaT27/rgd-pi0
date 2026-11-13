@@ -480,7 +480,7 @@ def main(argv: list[str] | None = None) -> int:
         "Railed fits are rejected in the producer (|A| at bound, sigma_A < floor, chi2/ndf > max).",
     ]
     if data.blockers:
-        header.insert(0, "*** DIAGNOSTIC ONLY -- provenance blockers present, DO NOT QUOTE ***")
+        header.insert(0, f"*** {io.preliminary_label(data)} -- provenance blockers present, see the prov lines ***")
     write_csv(table, args.out, header)
     print(f"wrote {len(table)} rows to {args.out}")
     return 0

@@ -273,7 +273,7 @@ def main(argv: list[str] | None = None) -> int:
         "sigma^2 = (<pT4> - <pT2>^2)/N_signal ignores the variance the subtraction injects.",
     ]
     if da.blockers or dd.blockers:
-        header.insert(0, "*** DIAGNOSTIC ONLY -- provenance blockers present, DO NOT QUOTE ***")
+        header.insert(0, f"*** {io.preliminary_label(da, dd)} -- provenance blockers present, see the prov lines ***")
     write_csv(table, args.out, header)
     print(f"wrote {len(table)} rows to {args.out}")
     return 0

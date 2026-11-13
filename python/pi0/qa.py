@@ -58,9 +58,8 @@ def _stamp(fig, data: io.StageBData) -> None:
     fig.text(0.005, 0.004, txt, fontsize=5.0, color=colour, ha="left", va="bottom")
     if any(x.fatal for x in data.blockers):
         fig.text(
-            0.5, 0.5, "DIAGNOSTIC ONLY\nDO NOT QUOTE", fontsize=44, color="crimson",
-            alpha=0.10, ha="center", va="center", rotation=30, zorder=100,
-            transform=fig.transFigure,
+            0.995, 0.004, io.preliminary_label(data), fontsize=7.0, color="crimson",
+            ha="right", va="bottom", transform=fig.transFigure,
         )
 
 
@@ -318,7 +317,7 @@ def main(argv: list[str] | None = None) -> int:
                    help="Grid B file, if not config/binning/grid_B_z_pt2.json (same as stageB_bin --grid-b)")
     p.add_argument("--outdir", required=True, type=Path, help="directory for the figures")
     p.add_argument("--allow-unpublishable", action="store_true",
-                   help="proceed despite fatal provenance blockers. Figures get a watermark.")
+                   help="proceed despite fatal provenance blockers. Figures are labelled Preliminary.")
     p.add_argument(
         "--shared-window", action="store_true",
         help="locate every bin's mass window with the fit to the SUMMED spectrum instead of the "
@@ -379,7 +378,7 @@ def main(argv: list[str] | None = None) -> int:
     plot_fit_vs_bin(res, args.outdir / "qa_fit_vs_bin.png", data)
     plot_alpha_vs_bin(res, args.outdir / "qa_alpha_vs_bin.png", data)
     note = (
-        "WINDOW FROM THE SUMMED-SPECTRUM FIT (--shared-window), not per-bin fits: DIAGNOSTIC"
+        "WINDOW FROM THE SUMMED-SPECTRUM FIT (--shared-window), not per-bin fits: cross-check only"
         if shared else "x error bars are the bins' FULL widths"
     )
     n_drawn = plot_abscissa_vs_centre(res, cfg, args.outdir / "qa_abscissa_vs_centre.png", data,

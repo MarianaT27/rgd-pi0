@@ -35,6 +35,7 @@ SAMPLES = {
                     "bsa": "analysis/full_z10_v2/results_full/bsa_{t}.csv",
                     "label": "full sample, 10 z bins, pool from xB 0.06"},
         "binning_v2": {"dir": "analysis/binning_v2", "results": "results_full", "bsa": "analysis/binning_v2/results_full/bsa_{t}.csv", "label": "full sample, binning v2"},
+        "v021": {"dir": "analysis/v021", "results": "results_full", "bsa": "analysis/v021/results_full/bsa_{t}.csv", "label": "v0.2.1"},
 }
 TARGETS = ["LD2", "CxC", "Cu", "Sn"]
 LABELS = {"LD2": r"LD$_2$", "CxC": "C", "Cu": "Cu", "Sn": "Sn"}
@@ -114,7 +115,7 @@ with PdfPages(f"{OUT}/bsa_grid_{S}.pdf") as pdf:
         handles = [plt.Line2D([], [], marker=MARKERS[t], color=COLORS[t], ls="", label=LABELS[t]) for t in TARGETS]
         fig.legend(handles=handles, loc="upper right", ncol=4, frameon=False, fontsize=9)
         fig.suptitle(rf"$A_{{LU}}^{{\sin\phi_h}}$ vs $z$,  $Q^2\in[{E['q2'][iq]:.2f},{E['q2'][iq + 1]:.2f}]$ GeV$^2$"
-                     f"  (rows $x_B$, columns $p_T^2$)   DIAGNOSTIC, {SAMPLES[S]['label']}",
+                     f"  (rows $x_B$, columns $p_T^2$)   Preliminary ({SAMPLES[S]['label']}, RG-A photon ID)",
                      x=0.02, ha="left", fontsize=10)
         fig.tight_layout(rect=(0, 0, 1, 0.96))
         pdf.savefig(fig)

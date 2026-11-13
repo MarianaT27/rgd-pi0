@@ -6,14 +6,18 @@ Python to draw:
 
 * ``kinematics_pi0.pdf``     -- the 2x2 coverage: M(gg), z, pT^2, phi_h,
 * ``phi_h_acceptance.pdf``   -- the phi_h acceptance for one target,
-* ``binning_grid_factorized.pdf`` -- the committed edges over the pooled data.
+* ``binning_grid_factorized.pdf`` -- the committed edges over the pooled data:
+  Grid A (x_B, Q^2), Grid B (p_T^2, z) and, since v0.2.3, a third panel
+  (nu, Q^2) with the edges of ``--nu-grid`` (default: the CLAS6 comparison
+  grid ``grid_A_q2_nu.json``; skipped if that file does not exist).
 
 phi_h follows the Trento convention and is reported in DEGREES over
 ``[-180, 180]`` -- the convention of ``core/Kinematics.hpp``. (A prior figure
 plotted it in radians, which is the bug this replaces.) Matplotlib only.
 
     python -m pi0.plots_kinematics --slimdir /volatile/.../rgd-pi0 \
-        --grids config/binning --outdir note/figures [--max-events N]
+        --grids config/binning --outdir note/figures [--max-events N] \
+        [--nu-grid config/binning/grid_A_q2_nu.json]
 """
 
 from __future__ import annotations
@@ -35,6 +39,9 @@ MIN_MGG = 0.001
 E_GAMMA_MIN_DEG = 8.0
 OA_A, OA_B, OA_OFF = 17.561, 0.756, 1.0  # theta_min(p) = A exp(-B p) + offset
 EBEAM = 10.54
+
+#: Panel titles for the known (Q2, nu) grids; any other file is titled by its name.
+_NU_GRID_NAMES = {"grid_A_q2_nu": "CLAS6 edges", "grid_A_q2_nu_hermes": "HERMES edges"}
 
 
 def _opening_min_deg(p: float) -> float:
@@ -141,6 +148,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--grids", type=Path, required=True, help="config/binning directory")
     p.add_argument("--config", type=Path, default=Path("config"), help="config directory")
     p.add_argument("--outdir", type=Path, required=True)
+    p.add_argument("--nu-grid", type=Path, default=None,
+                   help="(Q2, nu) grid for the third panel of binning_grid_factorized.pdf "
+                        "(default: <grids>/grid_A_q2_nu.json)")
     p.add_argument("--max-events", type=int, default=400000,
                    help="cap events read per target (coverage plot; default 400k)")
     args = p.parse_args(argv)
@@ -159,7 +169,8 @@ def main(argv: list[str] | None = None) -> int:
         ev = _load_slims(args.slimdir, t, args.max_events)
         recon[t] = reconstruct(ev, cuts)
         events[t] = {"q2": np.asarray(ev["q2"], float),
-                     "xb": np.asarray(ev["xb"], float)}
+                     "xb": np.asarray(ev["xb"], float),
+                     "nu": np.asarray(ev["nu"], float)}
 
     def step(ax, data, lo, hi, nb, t, lbl):
         h, edges = np.histogram(data[(data >= lo) & (data <= hi)], bins=nb, range=(lo, hi),
@@ -226,11 +237,27 @@ def main(argv: list[str] | None = None) -> int:
         ax.set(title=title, xlabel=xlabel, ylabel=ylabel,
                xlim=(xe[0], xhi), ylim=(ye[0], ye[-1]))
 
-    fig, (axa, axb) = plt.subplots(1, 2, figsize=(9.0, 4.0))
-    _grid(axa, xb_all, q2_all, xbe, q2e, xbe[-1],
+    nu_grid = args.nu_grid or (args.grids / "grid_A_q2_nu.json")
+    gn = None
+    if nu_grid.is_file():
+        gn = json.load(open(nu_grid))
+        if gn["axes"][1]["name"] != "nu":
+            raise SystemExit(f"{nu_grid}: second axis is {gn['axes'][1]['name']!r}, not 'nu'")
+    else:
+        print(f"note: {nu_grid} not found, binning_grid_factorized.pdf has no (nu, Q^2) panel")
+
+    fig, axs = plt.subplots(1, 3 if gn else 2, figsize=(13.5 if gn else 9.0, 4.0))
+    _grid(axs[0], xb_all, q2_all, xbe, q2e, xbe[-1],
           r"Grid A  $(x_B, Q^2)$", r"$x_B$", r"$Q^2$ [GeV$^2$]")
-    _grid(axb, pt2_all, z_all, pt2e, ze, min(pt2e[-1], 1.5),
+    _grid(axs[1], pt2_all, z_all, pt2e, ze, min(pt2e[-1], 1.5),
           r"Grid B  $(p_T^2, z)$", r"$p_T^2$ [GeV$^2$]", r"$z$")
+    if gn:
+        # nu is fixed by (Q^2, x_B): nu = Q^2 / (2 M x_B). Same events as Grid A.
+        nu_all = np.concatenate([events[t]["nu"] for t, _ in TARGETS])
+        q2n, nue = gn["axes"][0]["edges"], gn["axes"][1]["edges"]
+        _grid(axs[2], nu_all, q2_all, nue, q2n, nue[-1],
+              r"$(\nu, Q^2)$  " + _NU_GRID_NAMES.get(nu_grid.stem, nu_grid.stem),
+              r"$\nu$ [GeV]", r"$Q^2$ [GeV$^2$]")
     fig.tight_layout()
     fig.savefig(args.outdir / "binning_grid_factorized.pdf")
     plt.close(fig)

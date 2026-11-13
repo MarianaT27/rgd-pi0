@@ -7,8 +7,9 @@
 #                Input for this script: 95 slims in farm_full/<target>/<run>/<job>/slim_0.root
 #                (run 18540 was skimmed with --max-events, so its slim is marked truncated)
 #   B. Grid      make_grid: equal-statistics binning from all 95 slims
-#                -> config/binning/grid_A_q2_xb.json  (Q2, xB)
-#                -> config/binning/grid_B_z_pt2.json  (z, pT2)
+#                -> config/binning/grid_A_q2_xb.json  (Q2, xB), used
+#                -> $OUT/grid_B_z_pt2_equal_stat.json (z, pT2), written but NOT used (since v0.2.3):
+#                   Grid B is the hand-chosen CLAS6 grid config/binning/grid_B_z_pt2.json, never regenerated
 #   C. Bin       stageB_bin (the executable keeps its old name): fills the 4D/3D bins per target
 #                -> analysis/full/binned_full/<target>.root
 #   D. Extract   python modules in python/pi0, one block per observable:
@@ -22,7 +23,7 @@
 #   nohup bash analysis/scripts/run_full_chain.sh >& analysis/logs/run_full_chain.log &
 #
 # Stops at the first failing step (set -e). Every step is timestamped in the log.
-# Re-running overwrites the grid files and everything in analysis/full/binned_full,
+# Re-running overwrites Grid A (config/binning/grid_A_q2_xb.json; Grid B is never touched) and everything in analysis/full/binned_full,
 # results_full, figs_qa_full and figs_results_full.
 # =====================================================================================
 set -euo pipefail
@@ -38,12 +39,13 @@ stamp() { echo; echo "=== $(date '+%F %T')  $* ==="; }
 # B. Grid
 # -------------------------------------------------------------------------------------
 stamp "B. Grid: make_grid"
+mkdir -p $OUT
 args=()
 for f in $FULL/*/*/*/slim_0.root; do args+=(--input "$f"); done
 n=$(( ${#args[@]} / 2 ))
 echo "input files: $n"
 if [ "$n" -ne 95 ]; then echo "expected 95 files, found $n -- stopping"; exit 1; fi
-./build/src/tools/make_grid/make_grid "${args[@]}" --config config/cuts.json --out-a $GA --out-b $GB --threads 4
+./build/src/tools/make_grid/make_grid "${args[@]}" --config config/cuts.json --out-a $GA --out-b $OUT/grid_B_z_pt2_equal_stat.json --threads 4
 python3 analysis/scripts/pin_q2_edge.py $GA 2.0
 
 # -------------------------------------------------------------------------------------

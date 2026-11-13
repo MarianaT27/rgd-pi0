@@ -36,6 +36,7 @@ SAMPLES = {
     "full":  {"dir": "analysis/full",  "results": "results_full", "label": "full sample"},
     "ndis":  {"dir": "analysis/ndis",  "results": "results_full", "label": "full sample, inclusive N_DIS"},
     "binning_v2": {"dir": "analysis/binning_v2", "results": "results_full", "label": "full sample, binning v2"},
+    "v021": {"dir": "analysis/v021", "results": "results_full", "label": "v0.2.1"},
 }
 TARGETS = ["CxC", "Cu", "Sn"]
 LABELS = {"CxC": "C", "Cu": "Cu", "Sn": "Sn"}
@@ -43,11 +44,11 @@ COLORS = {"CxC": "#1f77b4", "Cu": "#d62728", "Sn": "#2ca02c"}
 M_P = 0.938272
 
 if len(sys.argv) != 2 or sys.argv[1] not in SAMPLES:
-    sys.exit("usage: python3 analysis/scripts/ra.py <diag3|f10|full>")
+    sys.exit(f"usage: python3 analysis/scripts/ra.py <{'|'.join(SAMPLES)}>")
 S = sys.argv[1]
 OUT = SAMPLES[S]["dir"]
 RES = f"{OUT}/{SAMPLES[S]['results']}"
-TAG = f"DIAGNOSTIC ({SAMPLES[S]['label']}, RG-A photon ID), stat. errors only"
+TAG = f"Preliminary ({SAMPLES[S]['label']}, RG-A photon ID), stat. errors only"
 
 
 def load(fn):
@@ -189,7 +190,7 @@ for ax, (name, xbr, q2r, thesis) in zip(axes.flat, PANELS):
     ax.set_xlim(0.28, 0.72)
 axes[0, 0].set_ylabel(r"$R_A$"); axes[1, 0].set_ylabel(r"$R_A$")
 axes[0, 0].legend(fontsize=7, frameon=False, ncol=2)
-fig.suptitle(f"RG-D: pi0 ({SAMPLES[S]['label']}, diagnostic) vs pi+ (thesis), pT2 0.24-0.48 GeV2", fontsize=10)
+fig.suptitle(f"RG-D: pi0 ({SAMPLES[S]['label']}, preliminary) vs pi+ (thesis), pT2 0.24-0.48 GeV2", fontsize=10)
 fig.tight_layout()
 fig.savefig(f"{OUT}/ra_compare_pip_{S}.png", dpi=150)
 plt.close(fig)
