@@ -57,3 +57,5 @@ compile_commands.json
 /farm_ndis/
 /patches/
 /*.tar.gz
+/analysis/cmp_wagon/
+/analysis/v021/

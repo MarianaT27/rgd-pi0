@@ -3,6 +3,25 @@
 One entry per patch, newest first. The version is the one in `meson.build` and
 `python/pi0/__init__.py`, and the git tag of the commit that applies the patch.
 
+## v0.2.2 (2026-11-05), patch `v0.2.2.patch`
+
+Applies on top of v0.2.1. Nothing needs to be rerun: without the new flag Stage A behaves exactly as in v0.2.1.
+
+### Added: `stageA_skim --skip-foreign-run`
+- **Why:** the LD2 SIDIS-train file of run 18540 holds 10 events of run 18539 (event numbers 6309641 to 6309650).
+  Stage A refuses a file with two runs (exit 5), so the v0.2.1 production has no slim for 18540.
+- **What it does:** events whose `RUN::config.run` is non-zero and differs from `--run` are counted and dropped
+  before the electron search. They reach neither the slim nor the QA trees, and they do not enter the single-run check.
+- **Requires `--run <N>`:** the run to keep is stated on the command line, never taken from whichever event comes first.
+  Without `--run` the program refuses to start.
+- **Default off:** without the flag a second run still exits 5, as before. The farm production is unchanged.
+- **Recorded:**
+  - provenance key `events.foreign_run_skipped`, always present: `run: events` for each skipped run, or `none` with the reason;
+  - a cutflow row `events from run N (--skip-foreign-run; skipped ...)` after the first row, only when the flag is given;
+  - a `foreign run` line in the startup printout.
+- `events.input_tag0` still counts every event read, skipped ones included.
+- Version 0.2.2 in `meson.build` and `python/pi0/__init__.py`.
+
 ## v0.2.1 (2026-10-29), patch `v0.2.1.patch`
 
 Applies on top of v0.2.0. **Stage B must be rerun**: the BSA needs the new `bsa_pol` tree.

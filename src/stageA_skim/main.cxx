@@ -9,7 +9,7 @@
 // usage:
 //   stageA_skim --input <file.hipo> --output <slim.root> --config <cuts.json>
 //               --target <LD2|CxC|Cu|Sn> [--run <N>] [--max-events <N>]
-//               [--qa-ntuple <qa.root>]
+//               [--qa-ntuple <qa.root>] [--skip-foreign-run]
 //
 // ---------------------------------------------------------------------------
 // WHY THERE IS A SECOND, OPT-IN OUTPUT (--qa-ntuple)
@@ -234,6 +234,9 @@ struct Args {
     std::string config;
     std::string target;
     std::optional<int> run;  ///< overrides RUN_config_run[0] for the model lookup
+    /// Skip events whose RUN::config.run is non-zero and differs from --run,
+    /// instead of refusing the file (exit 5). Requires --run. Default off.
+    bool skip_foreign_run{false};
     /// Stop after this many tag-0 events. nullopt = the whole file.
     ///
     /// `unsigned int` rather than a wider type because that is what
@@ -266,6 +269,7 @@ void print_usage(const char* argv0) {
         << "                        --config <cuts.json> --target <LD2|CxC|Cu|Sn>\n"
         << "                        [--run <N>] [--max-events <N>] [--qa-ntuple <qa.root>]\n"
         << "                        [--threads <N>] [--partition-target <N>]\n"
+        << "                        [--skip-foreign-run]\n"
         << "\n"
         << "  --input       ONE HIPO file. Entry numbering restarts per file; do not chain inputs.\n"
         << "  --output      slim ROOT file to create (overwritten if it exists).\n"
@@ -275,6 +279,12 @@ void print_usage(const char* argv0) {
         << "  --run         override the run number used to pick the GBT model. Normally the\n"
         << "                run is read from RUN::config; pass this only when you know the\n"
         << "                file's run number is wrong or absent.\n"
+        << "  --skip-foreign-run\n"
+        << "                skip events whose RUN::config.run is non-zero and differs from\n"
+        << "                --run, instead of refusing the file (exit 5). REQUIRES --run, so\n"
+        << "                the file's run never depends on which event comes first. The\n"
+        << "                skipped events are counted per run in the cutflow and in the\n"
+        << "                provenance (events.foreign_run_skipped). Default off.\n"
         << "  --max-events  stop after the first N tag-0 events (default: all of them).\n"
         << "                For smoke tests. The output is a PREFIX of the file, not a\n"
         << "                sample of it, so it is not a physics-representative subset --\n"
@@ -351,6 +361,8 @@ void print_usage(const char* argv0) {
                     "). Omit the flag to process the whole file.");
             }
             a.max_events = static_cast<unsigned int>(n);
+        } else if (flag == "--skip-foreign-run") {
+            a.skip_foreign_run = true;
         } else if (flag == "--qa-ntuple") {
             a.qa_ntuple = value();
         } else if (flag == "--threads") {
@@ -397,6 +409,13 @@ void print_usage(const char* argv0) {
     if (a.output.empty()) throw std::runtime_error("--output is required");
     if (a.config.empty()) throw std::runtime_error("--config is required");
     if (a.target.empty()) throw std::runtime_error("--target is required");
+    // Without --run the file's run is the first non-zero RUN::config.run, so a
+    // foreign event at the start of the file would become "the run" and every
+    // real event would be skipped as foreign. Refuse rather than guess.
+    if (a.skip_foreign_run && !a.run.has_value()) {
+        throw std::runtime_error("--skip-foreign-run requires --run <N>: the run to keep must be stated, not "
+                                 "taken from whichever event comes first.");
+    }
     // Two RECREATEs on one path leaves whichever closed last, so the slim would
     // be silently replaced by a diagnostic file that looks nothing like it.
     if (a.qa_ntuple.has_value() && *a.qa_ntuple == a.output) {
@@ -617,6 +636,7 @@ struct Counters {
     long long n_qa_electron_passed{};   ///< qa_electron rows with failed_at == -1
     std::map<std::string, long long> electron_fail;  ///< stage id -> count
     std::map<int, long long> runs_seen;              ///< non-zero run -> events
+    std::map<int, long long> foreign_skipped;        ///< foreign run -> events skipped (--skip-foreign-run)
 
     void merge(const Counters& o) {
         n_all += o.n_all;
@@ -631,6 +651,7 @@ struct Counters {
         n_qa_electron_passed += o.n_qa_electron_passed;
         for (const auto& [k, v] : o.electron_fail) electron_fail[k] += v;
         for (const auto& [k, v] : o.runs_seen) runs_seen[k] += v;
+        for (const auto& [k, v] : o.foreign_skipped) foreign_skipped[k] += v;
     }
 };
 
@@ -665,6 +686,7 @@ struct RawEvent {
 /// (which happens before any worker starts).
 struct EventContext {
     int run{};                                  ///< the FILE's run (not this event's)
+    bool skip_foreign_run{};                    ///< --skip-foreign-run
     const pi0::Cuts* cuts{};
     const pi0::photonid::FeatureCuts* feat_cuts{};
     pi0::photonid::ModelFn model{};
@@ -691,6 +713,13 @@ void process_event(const RVecI& p_pid, const RVecF& p_px, const RVecF& p_py, con
     // Single-row banks are RVecs too. Guard for empty, always.
     const int this_run = rc_run.empty() ? 0 : rc_run[0];
     const std::int64_t this_event = rc_event.empty() ? 0 : static_cast<std::int64_t>(rc_event[0]);
+    // --skip-foreign-run: an event from another run is counted and dropped here,
+    // before the electron search, so it reaches neither the slim nor the QA trees
+    // and does not enter runs_seen (the single-run check after the loop).
+    if (ctx.skip_foreign_run && this_run != 0 && this_run != ctx.run) {
+        ++buf.cnt.foreign_skipped[this_run];
+        return;
+    }
     if (this_run == 0) ++buf.cnt.n_run_zero; else ++buf.cnt.runs_seen[this_run];
 
     // HELICITY IS HWP-CORRECTED ALREADY (REC::Event.helicity). 0 == UNDEFINED.
@@ -976,7 +1005,12 @@ int main(int argc, char* argv[]) {
                           ? std::to_string(*args.max_events) + "   *** TRUNCATED RUN (--max-events) ***"
                           : std::string("all"))
                   << '\n'
-                  << "  GBT model  : " << model_name << (fallback_used ? "   *** RGA FALLBACK IN USE ***" : "") << '\n';
+                  << "  GBT model  : " << model_name << (fallback_used ? "   *** RGA FALLBACK IN USE ***" : "") << '\n'
+                  << "  foreign run: "
+                  << (args.skip_foreign_run ? "SKIPPED (--skip-foreign-run): events with RUN::config.run != " +
+                                                  std::to_string(run) + " are dropped and counted"
+                                            : std::string("refused (default): a second run in the file exits 5"))
+                  << '\n';
         if (fallback_used) {
             std::cout << "  WARNING: this run matches no trained model. Every photon below is being\n"
                       << "           identified by a model trained on different data. The output's\n"
@@ -1219,6 +1253,7 @@ int main(int argc, char* argv[]) {
         // (which happened above, before any worker exists).
         EventContext ctx;
         ctx.run = run;
+        ctx.skip_foreign_run = args.skip_foreign_run;
         ctx.cuts = &cuts;
         ctx.feat_cuts = &feat_cuts;
         ctx.model = model;
@@ -1467,6 +1502,14 @@ int main(int argc, char* argv[]) {
         const long long n_qa_electron_passed = counters.n_qa_electron_passed;
         std::map<std::string, long long>& electron_fail = counters.electron_fail;
         const std::map<int, long long>& runs_seen = counters.runs_seen;
+        const std::map<int, long long>& foreign_skipped = counters.foreign_skipped;
+        long long n_foreign_skipped = 0;
+        for (const auto& [r, n] : foreign_skipped) n_foreign_skipped += n;
+        std::string foreign_skipped_text;
+        for (const auto& [r, n] : foreign_skipped) {
+            if (!foreign_skipped_text.empty()) foreign_skipped_text += ", ";
+            foreign_skipped_text += std::to_string(r) + ": " + std::to_string(n);
+        }
 
         // ---- the single-run assumption ---------------------------------------
         // Checked before ANYTHING is written. The model was selected once for the
@@ -1553,6 +1596,15 @@ int main(int argc, char* argv[]) {
                      : std::string("all (no --max-events; the whole input was read)"));
         prov.add("events.input_tag0", std::to_string(n_all));
         prov.add("events.written", std::to_string(n_written));
+        // Always present, like events.max_events_requested: "none" must be an
+        // assertion in the file, not an inference from a missing key.
+        prov.add("events.foreign_run_skipped",
+                 !args.skip_foreign_run
+                     ? std::string("none (--skip-foreign-run not given; a second run would have exited 5)")
+                     : (foreign_skipped.empty()
+                            ? std::string("none (--skip-foreign-run given; no event from another run was found)")
+                            : foreign_skipped_text + " (run: events; skipped by --skip-foreign-run, counted in "
+                                                     "events.input_tag0, not written)"));
         // The parallelism used, and the guarantee that it did not touch the output.
         // Recorded so a file can be checked for the byte-identity claim after the
         // fact: same input + config + code_version at ANY --threads gives this same
@@ -1687,6 +1739,11 @@ int main(int argc, char* argv[]) {
             all_label << "all events (HIPO tag 0 = physics)";
         }
         rows.push_back({all_label.str(), n_all});
+        if (args.skip_foreign_run) {
+            rows.push_back({"events from run " + std::to_string(run) + " (--skip-foreign-run; skipped " +
+                                (foreign_skipped.empty() ? std::string("none") : foreign_skipped_text) + ")",
+                            n_all - n_foreign_skipped});
+        }
         rows.push_back({trigger_label.str(), n_has_electron});
 
         long long surviving = n_has_electron;
