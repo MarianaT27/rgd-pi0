@@ -1,7 +1,7 @@
 project(
   'rgd_pi0_analysis',
   'cpp',
-  version: '0.2.3',
+  version: '0.2.4',
   meson_version: '>=1.2',
   # hipo-cpp is vendored at external/hipo-cpp, so point meson's subproject
   # machinery at external/ instead of the default subprojects/. This is also

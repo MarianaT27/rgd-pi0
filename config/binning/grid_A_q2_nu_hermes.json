@@ -1,0 +1,36 @@
+{
+  "_comment": "Grid A for the HERMES COMPARISON (v0.2.4): (Q2, nu), per EVENT, the HERMES bin edges of Airapetian et al., Nucl. Phys. B 780 (2007) 1, arXiv:0704.3270, Table A.1: Q2 = 1, 1.5, 2, 3, 4, 5, 6, 8, 25 GeV2 and nu = 4, 6, 8, 10 GeV (their nu edges continue 12, ..., 23.5 GeV; at 10.54 GeV, y < 0.85 gives nu < 8.96, so the RG-D data stop in the 8-10 bin). Events with nu < 4 GeV are off this grid and enter neither the yields nor N_DIS, as in HERMES (nu > 4). Their cut nu > 6 GeV is the edge 6.0. Used only by run_hermes_chain.sh / hermes_ra.py, with grid_B_z_pt2_hermes.json and stageB_bin --xf-min 0. The Q2 edge 2.0 is also the SIDIS-train prescale threshold, so no Q2 bin straddles it.",
+  "_grid": "A",
+  "_schema_version": "1.0",
+  "axes": [
+    {
+      "name": "q2",
+      "n_bins": 8,
+      "edges": [
+        1.0,
+        1.5,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+        8.0,
+        25.0
+      ]
+    },
+    {
+      "name": "nu",
+      "n_bins": 3,
+      "edges": [
+        4.0,
+        6.0,
+        8.0,
+        10.0
+      ]
+    }
+  ],
+  "provenance": {
+    "source": "manual: HERMES Q2 and nu edges, arXiv:0704.3270 Table A.1, nu cut at 10 GeV (above the RG-D range)",
+    "n_events": 0
+  }
+}

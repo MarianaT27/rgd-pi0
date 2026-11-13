@@ -1,0 +1,44 @@
+{
+  "_comment": "Grid B for the HERMES COMPARISON (v0.2.4): (z, pT2), per pi0, the HERMES bin edges of arXiv:0704.3270 Table A.1: z = 0.1, 0.2, ..., 0.9, 1.3 and pT2 = 0, 0.05, 0.1, 0.3, 0.5, 0.7, 0.9, 1.1, 1.4, 1.95, 5 GeV2. Their cut z > 0.2 is the edge 0.2. The top z edge is theirs (1.3); the RG-D z window (cuts.json, z < 1) still applies, so the last bin holds 0.9 < z < 1. Pairs with z < 0.1 or pT2 > 5 GeV2 are off this grid. Used only by run_hermes_chain.sh / hermes_ra.py.",
+  "_grid": "B",
+  "_schema_version": "1.0",
+  "axes": [
+    {
+      "name": "z",
+      "n_bins": 9,
+      "edges": [
+        0.1,
+        0.2,
+        0.3,
+        0.4,
+        0.5,
+        0.6,
+        0.7,
+        0.8,
+        0.9,
+        1.3
+      ]
+    },
+    {
+      "name": "pt2",
+      "n_bins": 10,
+      "edges": [
+        0.0,
+        0.05,
+        0.1,
+        0.3,
+        0.5,
+        0.7,
+        0.9,
+        1.1,
+        1.4,
+        1.95,
+        5.0
+      ]
+    }
+  ],
+  "provenance": {
+    "source": "manual: HERMES z and pT2 edges, arXiv:0704.3270 Table A.1",
+    "n_events": 0
+  }
+}

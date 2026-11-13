@@ -5,7 +5,7 @@
 //   stageB_bin --input <slim.root> [--input <more.root> ...]
 //              --output <binned.root> --config <cuts.json>
 //              --grid-a <grid_A_q2_xb.json> --grid-b <grid_B_z_pt2.json>
-//              [--max-events N] [--allow-truncated-inputs]
+//              [--max-events N] [--allow-truncated-inputs] [--xf-min X]
 //
 // ===========================================================================
 // ONE RUN, MANY INPUTS, ONE POOL -- AND ONE TARGET
@@ -277,6 +277,11 @@ struct Args {
     /// would make the merge (partitions x cells) dominate. Lower it to expose more
     /// parallelism on a small input. See core/Summation.hpp.
     std::size_t partition_target{kPartitionTargetDefault};
+    /// Keep only pi0 pairs (same AND mixed) with x_F > this value. nullopt = no x_F
+    /// cut, the default and the production. For comparisons with experiments that cut
+    /// on x_F (HERMES: x_F > 0); a file binned with it is a different population and is
+    /// stamped so (provenance pairs.xf_min).
+    std::optional<double> xf_min;
 };
 
 void print_usage(const char* argv0) {
@@ -285,7 +290,7 @@ void print_usage(const char* argv0) {
               << "                       --config <cuts.json>\n"
               << "                       --grid-a <grid_A_q2_xb.json> --grid-b <grid_B_z_pt2.json>\n"
               << "                       [--max-events <N>] [--allow-truncated-inputs]\n"
-              << "                       [--threads <N>] [--partition-target <N>]\n"
+              << "                       [--threads <N>] [--partition-target <N>] [--xf-min <X>]\n"
               << "\n"
               << "  --input       a Stage A slim ROOT file (TTree \"events\"). Repeat for more; the N\n"
               << "                files are ONE run over ONE donor pool, which is the point -- a pool\n"
@@ -330,7 +335,11 @@ void print_usage(const char* argv0) {
               << "                A TUNING knob for granularity, NOT a correctness knob: the partition\n"
               << "                count is a pure function of (event count, this target) and never of the\n"
               << "                thread count, so the output is byte-identical across --threads for any\n"
-              << "                fixed value here. Lower it to expose more parallelism on a small input.\n";
+              << "                fixed value here. Lower it to expose more parallelism on a small input.\n"
+              << "  --xf-min      keep only pi0 pairs with x_F > X, same- and mixed-event alike, applied\n"
+              << "                right after the z window (default: no x_F cut). For comparisons with\n"
+              << "                experiments that cut on x_F (HERMES: --xf-min 0). NOT for the production:\n"
+              << "                the file is a different population and says so in its provenance.\n";
 }
 
 /// \throws std::runtime_error on any malformed or missing argument.
@@ -348,6 +357,22 @@ void print_usage(const char* argv0) {
         else if (flag == "--config") a.config = value();
         else if (flag == "--grid-a") a.grid_a = value();
         else if (flag == "--grid-b") a.grid_b = value();
+        else if (flag == "--xf-min") {
+            const std::string v = value();
+            double x = 0.0;
+            try {
+                std::size_t pos = 0;
+                x = std::stod(v, &pos);
+                if (pos != v.size()) throw std::invalid_argument("trailing characters");
+            } catch (const std::exception&) {
+                throw std::runtime_error("--xf-min wants a number, got \"" + v + "\"");
+            }
+            // x_F = p_L* / p_L,max* lies in [-1, 1]; a cut outside (-1, 1) is a typo.
+            if (!std::isfinite(x) || x <= -1.0 || x >= 1.0) {
+                throw std::runtime_error("--xf-min " + v + " is outside (-1, 1), the range of x_F.");
+            }
+            a.xf_min = x;
+        }
         else if (flag == "--max-events") {
             const std::string v = value();
             unsigned long long n = 0;
@@ -1177,6 +1202,8 @@ int main(int argc, char* argv[]) {
                     // selection would change with it.
                     if (!(s.z > cuts.sidis.z_min && s.z < cuts.sidis.z_max)) continue;
                     ++out.n_same_z;
+                    // --xf-min (HERMES comparison only; off by default).
+                    if (args.xf_min && !(s.xf > *args.xf_min)) continue;
 
                     const int imgg = mgg_axis.find(p.mgg);
                     if (imgg < 0) continue;
@@ -1288,6 +1315,8 @@ int main(int argc, char* argv[]) {
                                                                         ee, cuts.beam.energy_gev);
                         if (!(s.z > cuts.sidis.z_min && s.z < cuts.sidis.z_max)) continue;
                         ++out.n_mixed_z;
+                        // --xf-min: the same cut on the mixed pair, against this event's photon.
+                        if (args.xf_min && !(s.xf > *args.xf_min)) continue;
 
                         const int imgg = mgg_axis.find(mp->mgg);
                         if (imgg < 0) continue;
@@ -1974,6 +2003,13 @@ int main(int argc, char* argv[]) {
                            "provenance_stageA_NNN/events.max_events_requested.")
                      : std::string("false (the default: every input asserted a full Stage A run, or carried no "
                                    "provenance at all to assert with)"));
+        // Stamped always, so "no x_F cut" is an assertion in the file, not an absent key.
+        prov.add("pairs.xf_min",
+                 args.xf_min ? ("x_F > " + fmt(*args.xf_min) +
+                                " -- --xf-min WAS GIVEN: only pi0 pairs (same and mixed) with x_F above this "
+                                "value are binned. For comparisons with experiments that cut on x_F (HERMES); "
+                                "NOT the production population.")
+                             : std::string("none (the default: no x_F cut)"));
         prov.add("events.read", std::to_string(n_events) + " (total, over " + std::to_string(chain.size()) +
                                     " input(s); the per-input split is in inputs.N.n_events_used)");
         prov.add("events.off_grid_a",
@@ -2039,6 +2075,9 @@ int main(int argc, char* argv[]) {
                   << "e-gamma-passing list)\n"
                   << "  ... in the z window            : " << n_same_z << "  (" << cuts.sidis.z_min << " < z < "
                   << cuts.sidis.z_max << ")\n"
+                  << "  x_F cut (--xf-min)             : "
+                  << (args.xf_min ? ("x_F > " + fmt(*args.xf_min) + ", applied after the z window to same and "
+                                     "mixed pairs") : std::string("none")) << '\n'
                   << "  ... binned (on the 4D grid)    : " << n_same_binned << '\n'
                   << "  ... with helicity == 0         : " << n_hel_undef << "  (absent from `bsa` ONLY)\n"
                   << "  BSA entries filled             : " << n_bsa_filled << '\n'

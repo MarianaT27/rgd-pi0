@@ -390,6 +390,13 @@ def check_provenance(prov: Provenance, prov_a: Provenance, cfg: Config) -> list[
     if "TRUNCATED" in max_ev.upper():
         blockers.append(Blocker("provenance_stageA/events.max_events_requested", max_ev))
 
+    # v0.2.4: a file binned with stageB_bin --xf-min holds only the pairs above an x_F
+    # cut (HERMES comparison). A warning, not a blocker: the numbers are right for that
+    # population, but it is not the production one. Absent key = made before v0.2.4 = no cut.
+    xf_min = (prov.get("pairs.xf_min") or "").strip()
+    if xf_min and not xf_min.lower().startswith("none"):
+        blockers.append(Blocker("provenance/pairs.xf_min", xf_min, fatal=False))
+
     return blockers
 
 

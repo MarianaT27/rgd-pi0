@@ -3,6 +3,40 @@
 One entry per patch, newest first. The version is the one in `meson.build` and
 `python/pi0/__init__.py`, and the git tag of the commit that applies the patch.
 
+## v0.2.4 (2026-11-13), patch `v0.2.4.patch`
+
+Applies on top of v0.2.3. Nothing in the production changes: without the new flag Stage B behaves
+exactly as in v0.2.3. Stage B must be rebuilt (`meson compile -C build`) for the HERMES chain.
+
+### Added: RG-D R_A in the HERMES bins, with the HERMES cuts (RG-D only)
+- Reference: Airapetian et al. (HERMES), Nucl. Phys. B 780 (2007) 1, arXiv:0704.3270. Edges from their
+  Table A.1, cuts from Sec. 5 (nu > 6 GeV, z > 0.2, x_F > 0). Each panel cuts on the other variables,
+  not its own: R vs nu (z > 0.2), R vs z (nu > 6), R vs Q^2 and R vs p_T^2 (nu > 6, z > 0.2); x_F > 0 in all.
+- The cuts apply to this plot only. Production grids, cuts.json and binned files are not touched.
+- **Grids** `config/binning/grid_A_q2_nu_hermes.json` (Q^2 = 1, 1.5, 2, 3, 4, 5, 6, 8, 25 GeV^2;
+  nu = 4, 6, 8, 10 GeV) and `config/binning/grid_B_z_pt2_hermes.json` (z = 0.1, ..., 0.9, 1.3;
+  p_T^2 = 0, 0.05, 0.1, 0.3, 0.5, 0.7, 0.9, 1.1, 1.4, 1.95, 5 GeV^2). nu > 6 and z > 0.2 are bin edges,
+  applied by bin selection. RG-D reaches nu < 8.96 GeV (y < 0.85 at 10.54 GeV): only the first three nu bins.
+- **`stageB_bin --xf-min X`**: keeps only pi0 pairs with x_F > X, same- and mixed-event, right after the
+  z window. Default: no x_F cut. X must be in (-1, 1). A pair with x_F not computed (NaN) is dropped.
+  - New provenance key `pairs.xf_min`, always written (`none (the default: no x_F cut)` without the flag).
+  - New line `x_F cut (--xf-min)` in the cutflow printout.
+  - `pi0.io.check_provenance`: a file binned with an x_F cut gets a WARNING (not fatal),
+    `provenance/pairs.xf_min`. A file without the key (made before v0.2.4) has no x_F cut.
+- **`analysis/scripts/hermes_ra.py`**: for each HERMES bin, sums the m_gg spectra of the RG-D 4D bins
+  inside it and runs the production extraction on the sum (the method of `clas6_compare.py`); N_DIS summed
+  over the same (Q^2, nu) cells. Writes `hermes_ra.csv` and `hermes_ra.pdf/.png` (2x2: R vs nu, z, Q^2,
+  p_T^2), standard target colours, label `Preliminary (...)`, the x_F cut read from the files' provenance.
+  Points at the target's own mean; for nu that is <Q^2>/(2M<x_B>) (Stage B does not sum nu).
+- **`analysis/scripts/run_hermes_chain.sh`**: Stage B on the v0.2.1 slims with the HERMES grids and
+  `--xf-min 0`, then `hermes_ra.py`. Output in `analysis/hermes/` (in `.gitignore`).
+- `pi0.plots_kinematics --nu-grid config/binning/grid_A_q2_nu_hermes.json` draws the HERMES (nu, Q^2)
+  grid in the third panel of `binning_grid_factorized.pdf`.
+- Tests: `python/tests/test_hermes.py` (grid edges, the cuts as bin selections, the x_F warning).
+- **Not compiled here**: the C++ change was written without a ROOT build. Build and run `meson test -C build`
+  on ifarm before `run_hermes_chain.sh`.
+- Version 0.2.4 in `meson.build` and `python/pi0/__init__.py`.
+
 ## v0.2.3 (2026-11-13), patch `v0.2.3.patch`
 
 Applies on top of v0.2.2. **Stage B must be rerun** for anything binned with the v0.2.2 Grid B
