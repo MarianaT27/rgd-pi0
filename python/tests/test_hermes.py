@@ -83,3 +83,38 @@ def test_xf_cut_file_is_flagged_not_blocked():
 def test_no_xf_cut_is_not_flagged():
     assert _blockers("none (the default: no x_F cut)") == []
     assert _blockers(None) == []
+
+
+# ---------------------------------------------------------------------------
+# v0.2.6: the HERMES values (HEPData ins749249 v1, Tables 97 to 112)
+# ---------------------------------------------------------------------------
+
+
+def test_hermes_values_file_matches_the_grids(hermes):
+    mod, cfg = hermes
+    data = mod.load_hermes(REPO / mod.HERMES_CSV)
+    e = mod.axes_of(cfg.binning)
+    n_bins = {"nu": 9, "z": 9, "q2": 8, "pt2": 9}       # their tables; our pT2 grid adds 1.95-5
+    assert sorted({n for n, _ in data}) == sorted(mod.HERMES_NUCLEI)
+    for (n, var), pts in data.items():
+        assert len(pts) == n_bins[var], (n, var)
+        assert all(0.3 < r < 1.2 and 0 < s < 0.2 for _, r, s in pts), (n, var)
+    # bin edges in the file are the HERMES grid edges (nu only up to 10 in our grid)
+    import csv as _csv
+    with open(REPO / mod.HERMES_CSV) as f:
+        rows = list(_csv.DictReader(line for line in f if not line.startswith("#")))
+    for r in rows:
+        edges = list(e[r["var"]])
+        lo, hi = float(r["lo"]), float(r["hi"])
+        if r["var"] == "nu" and lo >= 10.0:
+            continue
+        assert any(abs(lo - x) < 1e-9 for x in edges) and any(abs(hi - x) < 1e-9 for x in edges), r
+
+
+def test_hermes_spot_values():
+    """Copied unchanged: Kr vs z first bin is 0.853 +- 0.013 in HEPData Table 106."""
+    import csv as _csv
+    with open(REPO / "analysis/scripts/hermes2007_pi0.csv") as f:
+        rows = list(_csv.DictReader(line for line in f if not line.startswith("#")))
+    kr = [r for r in rows if r["nucleus"] == "Kr" and r["var"] == "z"][0]
+    assert (kr["lo"], kr["hi"], kr["R"], kr["stat"], kr["hepdata_table"]) == ("0.1", "0.2", "0.853", "0.013", "106")

@@ -107,8 +107,9 @@ for i, t in enumerate(TARGETS):
 ax1.axhline(0, color="gray", lw=0.8, ls="--")
 ax1.set_ylabel(r"$A_{LU}^{\sin\phi_h}$")
 ax1.legend(frameon=False, ncol=4)
-ax1.text(0.02, 0.95, f"Preliminary ({SAMPLES[S]['label']}, RG-A photon ID)", transform=ax1.transAxes,
-         va="top", fontsize=8, color="gray")
+# v0.2.6: below the figure, bottom right (it used to sit under the legend, top left of ax1)
+fig.text(0.9, 0.04, f"Preliminary ({SAMPLES[S]['label']}, RG-A photon ID)", ha="right", va="top",
+         fontsize=8, color="gray")
 mD, eD = res["LD2"]
 for i, t in enumerate(["CxC", "Cu", "Sn"]):
     m, e = res[t]

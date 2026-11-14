@@ -42,6 +42,8 @@ Reads:   <binned_dir>/{LD2,CxC,Cu,Sn}.root, config/, config/binning/grid_A_q2_nu
 Writes:  <out_dir>/clas6_compare.csv                 every bin: their values and RG-D values
          <out_dir>/clas6_q2_nu_z.pdf/.png             set 2, R vs z, one panel per (Q2, nu)
          <out_dir>/clas6_nu_z_pt2.pdf/.png            set 1, R vs pT2, one panel per (z, nu)
+         <out_dir>/clas6_fig2.pdf/.png                set 2 in one panel, as their Fig. 2 (v0.2.6):
+                                                      all 9 (Q2, nu) bins, x 0.27-0.92, y 0-1.1
 Prints:  number of bins computed and failed per set and target
 """
 import csv
@@ -64,10 +66,11 @@ OURS = ["CxC", "Cu", "Sn"]
 THEIRS = {"CxC": "C", "Cu": "Fe", "Sn": "Pb"}          # drawn side by side
 LABEL = {"CxC": "C", "Cu": "Cu", "Sn": "Sn"}
 COLOR = {"CxC": "#1f77b4", "Cu": "#d62728", "Sn": "#2ca02c"}   # standard RG-D target colours
-# CLAS6 nuclei: a darker shade of the RG-D colour drawn next to it, so no colour is shared
-# with RG-D (v0.2.3; C used to be the same blue): C navy next to our C blue, Fe (A=56) maroon
-# next to Cu (A=63) red, Pb (A=208) dark green next to Sn (A=119) green. Open squares.
-THEIR_COLOR = {"CxC": "#0b2f5a", "Cu": "maroon", "Sn": "darkgreen"}
+# CLAS6 nuclei (v0.2.6): C the same blue as our C (same nucleus; told apart by the marker,
+# RG-D filled circles, CLAS6 open squares), Fe orange, Pb gold (darker than plain yellow,
+# which does not show on white). No colour shared with a different RG-D nucleus.
+THEIR_COLOR = {"CxC": "#1f77b4", "Cu": "#ff7f0e", "Sn": "#d4b000"}
+LEGEND_FONTSIZE = 10
 Q2_RANGE = (1.0, 4.1)       # set 1 integrates Q2 over their full range
 PT2_RANGE = (0.0, 1.5)      # set 2 integrates pT2 over their full range
 EPS = 1e-6
@@ -142,6 +145,51 @@ def ratio(ya, yd, nda, ndd):
     return r, r * rel
 
 
+def fig2(s2, out):
+    """Set 2 in one panel, as Mineeva et al. Fig. 2 (v0.2.6).
+
+    R_A vs z with all 9 (Q2, nu) bins together, axis ranges of their figure (read off it by
+    eye): x 0.27-0.92, y 0-1.1. RG-D filled circles, CLAS6 open squares, colour per nucleus.
+    Inside each z bin the 9 (Q2, nu) bins are spread sideways (+-0.02), as in their figure,
+    the same spread for every nucleus; CLAS6 squares sit 0.0025 to the right of the RG-D point
+    of the same bin. x of a bin = the RG-D LD2 mean z of that (Q2, nu, z) bin, for both RG-D
+    and CLAS6 (their table gives no mean z); the bin centre if the LD2 mean is missing.
+    """
+    keys = sorted({(r["a_lo"], r["a_hi"], r["b_lo"], r["b_hi"]) for r in s2})   # 9 (Q2, nu) bins
+    off = {k: 0.005 * (i - (len(keys) - 1) / 2) for i, k in enumerate(keys)}
+    fig, ax = plt.subplots(figsize=(7.0, 6.5))
+    for t in OURS:
+        th = THEIRS[t]
+        xs, ys, es, hx, hy, he = [], [], [], [], [], []
+        for r in s2:
+            k = (r["a_lo"], r["a_hi"], r["b_lo"], r["b_hi"])
+            x0 = r["zbar"] if np.isfinite(r["zbar"]) else 0.5 * (r["c_lo"] + r["c_hi"])
+            x = x0 + off[k]
+            if np.isfinite(r[t][0]):
+                xs.append(x); ys.append(r[t][0]); es.append(r[t][1])
+            if r[th]:
+                hx.append(x + 0.0025); hy.append(r[th][0]); he.append(r[th][1])
+        ax.errorbar(xs, ys, yerr=es, fmt="o", ms=4.5, color=COLOR[t], capsize=1.5, lw=0.8,
+                    label=f"RG-D {LABEL[t]}")
+        ax.errorbar(hx, hy, yerr=he, fmt="s", ms=4.5, mfc="none", mew=1.1, color=THEIR_COLOR[t],
+                    capsize=1.5, lw=0.8, label=f"CLAS6 {th}")
+    ax.set_xlim(0.27, 0.92)
+    ax.set_ylim(0.0, 1.1)
+    ax.minorticks_on()
+    ax.set_xlabel(r"$z$", fontsize=13)
+    ax.set_ylabel(r"$R_A^{\pi^0}$", fontsize=13)
+    h, lab = ax.get_legend_handles_labels()
+    order = [lab.index(f"RG-D {LABEL[t]}") for t in OURS] + [lab.index(f"CLAS6 {THEIRS[t]}") for t in OURS]
+    ax.legend([h[i] for i in order], [lab[i] for i in order], frameon=False, fontsize=LEGEND_FONTSIZE + 1,
+              ncol=2, loc="lower left", markerscale=1.4)
+    ax.set_title(r"$\pi^0$ $R_A$ in all 9 CLAS6 ($Q^2$, $\nu$) bins, $p_T^2<1.5$ GeV$^2$" "\n"
+                 r"RG-D vs Mineeva et al. arXiv:2406.04513; stat. errors", fontsize=10)
+    fig.tight_layout()
+    for ext in ("pdf", "png"):
+        fig.savefig(out / f"clas6_fig2.{ext}", dpi=150)
+    plt.close(fig)
+
+
 def main():
     if len(sys.argv) != 3:
         sys.exit("usage: python3 analysis/scripts/clas6_compare.py <binned_dir> <out_dir>")
@@ -201,13 +249,14 @@ def main():
             y = np.array([r[t][0] for r in sub])
             e = np.array([r[t][1] for r in sub])
             ok = np.isfinite(y)
-            ax.errorbar(xc[ok] + dx, y[ok], yerr=e[ok], fmt="o", ms=3.5, color=COLOR[t], capsize=1.5,
+            ax.errorbar(xc[ok] + dx, y[ok], yerr=e[ok], fmt="o", ms=4, color=COLOR[t], capsize=1.5,
                         lw=0.8, label=f"RG-D {LABEL[t]}")
             hv = [(xc[i], r[th][0], r[th][1]) for i, r in enumerate(sub) if r[th]]
             if hv:
                 hx, hy, he = map(np.array, zip(*hv))
                 ax.errorbar(hx + dx + 0.004 * (max(r[xkey_hi] for r in sub)), hy, yerr=he, fmt="s",
-                            mfc="none", ms=4, color=THEIR_COLOR[t], capsize=1.5, lw=0.8, label=f"CLAS6 {th}")
+                            mfc="none", mew=1.1, ms=4.5, color=THEIR_COLOR[t], capsize=1.5, lw=0.8,
+                            label=f"CLAS6 {th}")
         ax.axhline(1.0, color="gray", lw=0.6, ls="--")
         ax.set_ylim(0.0, 1.6)
 
@@ -226,7 +275,7 @@ def main():
                 ax.set_xlabel(r"$z$")
             if j == 0:
                 ax.set_ylabel(r"$R_A$")
-    axs[0, -1].legend(frameon=False, fontsize=7, ncol=2)
+    axs[0, -1].legend(frameon=False, fontsize=LEGEND_FONTSIZE, ncol=2, markerscale=1.4)
     fig.suptitle(r"$\pi^0$ $R_A$ in the CLAS6 (Q$^2$, $\nu$, $z$) bins, $p_T^2<1.5$ GeV$^2$; "
                  "RG-D (filled) vs Mineeva et al. arXiv:2406.04513 (open); stat. errors", fontsize=10)
     fig.tight_layout()
@@ -249,14 +298,16 @@ def main():
                 ax.set_xlabel(r"$p_T^2$ [GeV$^2$]")
             if j == 0:
                 ax.set_ylabel(r"$R_A$")
-    axs[0, -1].legend(frameon=False, fontsize=7, ncol=2)
+    axs[0, -1].legend(frameon=False, fontsize=LEGEND_FONTSIZE, ncol=2, markerscale=1.4)
     fig.suptitle(r"$\pi^0$ $R_A$ in the CLAS6 ($\nu$, $z$, $p_T^2$) bins, $1<Q^2<4.1$ GeV$^2$; "
                  "RG-D (filled) vs Mineeva et al. arXiv:2406.04513 (open); stat. errors", fontsize=10)
     fig.tight_layout()
     for ext in ("pdf", "png"):
         fig.savefig(out / f"clas6_nu_z_pt2.{ext}", dpi=140)
     plt.close(fig)
-    print(f"\nwrote {out}/clas6_compare.csv, clas6_q2_nu_z.pdf/.png, clas6_nu_z_pt2.pdf/.png")
+    fig2(s2, out)
+    print(f"\nwrote {out}/clas6_compare.csv, clas6_q2_nu_z.pdf/.png, clas6_nu_z_pt2.pdf/.png, "
+          "clas6_fig2.pdf/.png")
 
 
 if __name__ == "__main__":

@@ -34,6 +34,7 @@ __all__ = [
     "check_provenance",
     "load",
     "preliminary_label",
+    "preliminary_label_from_text",
 ]
 
 
@@ -298,8 +299,12 @@ def _read_stage_a(f: uproot.ReadOnlyDirectory) -> Provenance:
     )
     if truncated is not None:
         merged["events.max_events_requested"] = truncated.require("events.max_events_requested")
-    # Every Stage A code version among the inputs (v0.2.3), for the Preliminary label.
-    versions = sorted({(b.get("stageA_skim.code_version") or "").strip() for b in blocks} - {""})
+    # Every Stage A code version among the inputs, for the Preliminary label: only the
+    # x.y.z number. The stamp itself is the meson string
+    # "0.2.1 (meson project version; source tree is not under VCS, so no commit is recorded)"
+    # (v0.2.6: v0.2.3 kept the whole string, commas included).
+    versions = sorted({v for b in blocks for v in _VERSION_RE.findall(b.get("stageA_skim.code_version") or "")},
+                      key=_version_key)
     merged["stageA_skim.code_versions"] = ", ".join(versions)
 
     return Provenance(directory=f"provenance_stageA_[{len(names)} input(s)]", entries=merged)
@@ -583,22 +588,50 @@ def load(
     return data
 
 
-def preliminary_label(*datas: "StageBData") -> str:
-    """The label on every figure, CSV and log line made from blocked data (v0.2.3).
+_VERSION_RE = re.compile(r"(?<![\d.])\d+\.\d+\.\d+(?![\d.])")  # also matches "v0.2.1"
 
-    ``Preliminary (v0.2.1, RG-A photon ID)``: the Stage A version(s) that made the
-    slims, then ``RG-A photon ID`` if any input was scored by the RG-A GBT
-    fallback. It replaces the old "DIAGNOSTIC ONLY / DO NOT QUOTE" wording; the
-    provenance checks and the blocker list behind it are unchanged.
+
+def _version_key(v: str) -> tuple[int, ...]:
+    return tuple(int(x) for x in v.split("."))
+
+
+def _format_preliminary(versions: set[str], rga: bool) -> str:
+    """``Preliminary (v<oldest>, RG-A photon ID)``; the oldest version is the production's."""
+    bits = [f"v{min(versions, key=_version_key)}"] if versions else []
+    if rga:
+        bits.append("RG-A photon ID")
+    return f"Preliminary ({', '.join(bits)})" if bits else "Preliminary"
+
+
+def preliminary_label(*datas: "StageBData") -> str:
+    """The label on every figure, CSV and log line made from blocked data (v0.2.3, fixed v0.2.6).
+
+    ``Preliminary (v0.2.1, RG-A photon ID)``: the OLDEST Stage A version among the
+    inputs, which is the version of the production (a run re-skimmed later with
+    newer code does not rename the production), then ``RG-A photon ID`` if any
+    input was scored by the RG-A GBT fallback. Only the x.y.z number is taken from
+    the stamp, which is the full meson string
+    ``0.2.1 (meson project version; source tree is not under VCS, so no commit is recorded)``.
+    It replaces the old "DIAGNOSTIC ONLY / DO NOT QUOTE" wording; the provenance
+    checks and the blocker list behind it are unchanged.
     """
     versions: set[str] = set()
     rga = False
     for d in datas:
         a = d.prov_stage_a
         v = a.get("stageA_skim.code_versions") or a.get("stageA_skim.code_version") or ""
-        versions |= {x.strip() for x in v.split(",") if x.strip()}
+        versions |= set(_VERSION_RE.findall(v))
         rga = rga or _tripped(a, "gbt.fallback_used")
-    bits = [", ".join(f"v{v.lstrip('v')}" for v in sorted(versions))] if versions else []
-    if rga:
-        bits.append("RG-A photon ID")
-    return f"Preliminary ({', '.join(bits)})" if bits else "Preliminary"
+    return _format_preliminary(versions, rga)
+
+
+def preliminary_label_from_text(text: str) -> str:
+    """The same label rebuilt from a CSV header line written by v0.2.3 to v0.2.5.
+
+    Those lines carry the garbled label (the whole meson string, split at its
+    commas); the x.y.z numbers and "RG-A photon ID" in it are enough to rebuild it,
+    so the CSVs do not have to be remade. "" if the line has no "Preliminary".
+    """
+    if "Preliminary" not in text:
+        return ""
+    return _format_preliminary(set(_VERSION_RE.findall(text)), "RG-A photon ID" in text)

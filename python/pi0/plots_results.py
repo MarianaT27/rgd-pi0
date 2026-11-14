@@ -27,6 +27,8 @@ from pathlib import Path
 
 import numpy as np
 
+from . import io
+
 #: (file/provenance target, mass number A, plot label). C, Cu, Sn -- ratioed to LD2.
 TARGETS = [("CxC", 12.0, "C"), ("Cu", 63.5, "Cu"), ("Sn", 118.7, "Sn")]
 COLORS = {"CxC": "#1f77b4", "Cu": "#d62728", "Sn": "#2ca02c"}
@@ -46,7 +48,9 @@ def _label(path: Path) -> str:
             if not line.startswith("#"):
                 break
             if "Preliminary" in line:
-                return line.lstrip("# *").split(" -- ")[0].strip()
+                # rebuilt from the numbers in the line: CSVs from v0.2.3 to v0.2.5 carry a
+                # garbled label (the whole meson version string), fixed in v0.2.6
+                return io.preliminary_label_from_text(line)
     return ""
 
 

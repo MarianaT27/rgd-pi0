@@ -3,6 +3,49 @@
 One entry per patch, newest first. The version is the one in `meson.build` and
 `python/pi0/__init__.py`, and the git tag of the commit that applies the patch.
 
+## v0.2.6 (2026-11-14), patch `v0.2.6.patch`
+
+Applies on top of v0.2.5. Plots and labels only: no change to Stage A, Stage B, the extraction or any
+number. Rerun only the plot scripts on the existing files (see README_v0.2.6.md).
+
+### Fixed: the Preliminary label (bug of v0.2.3)
+- Stage A stamps `stageA_skim.code_version` as the full meson string
+  `0.2.1 (meson project version; source tree is not under VCS, so no commit is recorded)`.
+  v0.2.3 split it at its commas, so labels came out garbled, and the long text widened the
+  `results_*` figures (saved with `bbox_inches="tight"`) and pushed the plot to the right.
+- `pi0.io`: only the x.y.z number is taken from the stamp (`stageA_skim.code_versions` now holds
+  e.g. `0.2.1, 0.2.2`). The label names the OLDEST version among the inputs, the production's:
+  `Preliminary (v0.2.1, RG-A photon ID)` for the v0.2.1 slims, of which at least one input carries
+  a v0.2.2 stamp.
+- New `pi0.io.preliminary_label_from_text`: rebuilds the label from a CSV header line.
+  `pi0.plots_results` uses it, so the CSVs written by v0.2.3 to v0.2.5 work without being remade.
+- Tests with the real meson string and the exact garbled header line (`test_preliminary.py`).
+
+### Fixed: BSA label on top of the legend
+- `bsa.py`: the label moves from the top left of the upper panel (where the 4-column legend is) to
+  below the figure, bottom right.
+
+### Changed: CLAS6 comparison (`clas6_compare.py`)
+- CLAS6 C has the same blue as RG-D C (same nucleus, told apart by the marker: RG-D filled circles,
+  CLAS6 open squares); CLAS6 Fe orange `#ff7f0e`, Pb gold `#d4b000`. RG-D colours unchanged.
+- Legend font 7 -> 10, markers in the legend x1.4.
+- New `clas6_fig2.pdf/.png`, as Mineeva et al. Fig. 2: R_A vs z, all 9 (Q^2, nu) bins in one panel,
+  x 0.27-0.92, y 0-1.1 (read off their figure by eye), RG-D and CLAS6 together, the 9 bins spread by
+  +-0.02 inside each z bin. x of a bin = RG-D LD2 mean z of that bin, for RG-D and CLAS6 (their table
+  has no mean z). The two existing figures stay.
+
+### Changed: HERMES comparison (`hermes_ra.py`)
+- HERMES points added: new `analysis/scripts/hermes2007_pi0.csv`, the 16 pi0 tables of HEPData
+  ins749249 v1 (doi:10.17182/hepdata.13387.v1, Tables 97 to 112): He, Ne, Kr, Xe vs nu, z, Q^2, p_T^2,
+  copied unchanged. Open squares at their mean, stat. errors only; colours He `#9467bd`, Ne `#8c564b`,
+  Kr `#e377c2`, Xe `#7f7f7f`.
+- Layout as their pi0 figure: 4 panels in one row, shared y, no gaps. Ranges read off their figure by
+  eye: y 0.4-1.2, nu 1-25 GeV (linear), z 0-1.1 (linear), Q^2 0.8-16 GeV^2 (log), p_T^2 0.01-4 GeV^2
+  (log). RG-D points above 1.2 fall outside. Legend to the right, font 11.
+- Tests: the HEPData copy against the HERMES grid edges and a spot value (`test_hermes.py`).
+
+- Version 0.2.6 in `meson.build` and `python/pi0/__init__.py`.
+
 ## v0.2.5 (2026-11-13), patch `v0.2.5.patch`
 
 Applies on top of v0.2.4. Test-only: no code, grid or config change, nothing to rerun.

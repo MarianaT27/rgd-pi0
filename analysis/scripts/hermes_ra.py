@@ -42,9 +42,18 @@ Differences from HERMES that remain:
   - nuclei: C, Cu, Sn vs their He, Ne, Kr, Xe
   - pi0 identification, acceptance, radiative corrections: RG-D's (none applied here), not theirs
 
-Reads:   <binned_dir>/{LD2,CxC,Cu,Sn}.root, config/, the two HERMES grids
-Writes:  <out_dir>/hermes_ra.csv        every point: bin, cuts, mean, R, error, extraction status
-         <out_dir>/hermes_ra.pdf/.png   2x2 panels: R_A vs nu, z, Q2, pT2
+HERMES values (v0.2.6): analysis/scripts/hermes2007_pi0.csv, the 16 pi0 tables of HEPData
+ins749249 v1 (He, Ne, Kr, Xe vs nu, z, Q2, pT2), drawn as open squares at their own mean,
+stat. errors only (as ours).
+
+Layout (v0.2.6): as their pi0 figure, 4 panels in one row with a shared y axis and no gaps;
+axis ranges read off their figure by eye: y 0.4-1.2, nu 1-25 GeV (linear), z 0-1.1 (linear),
+Q2 0.8-16 GeV2 (log), pT2 0.01-4 GeV2 (log). RG-D points above 1.2 fall outside.
+
+Reads:   <binned_dir>/{LD2,CxC,Cu,Sn}.root, config/, the two HERMES grids,
+         analysis/scripts/hermes2007_pi0.csv
+Writes:  <out_dir>/hermes_ra.csv        every RG-D point: bin, cuts, mean, R, error, extraction status
+         <out_dir>/hermes_ra.pdf/.png   1x4 panels: R_A vs nu, z, Q2, pT2, RG-D and HERMES
 Prints:  every point, and the bins that failed per target
 """
 import csv
@@ -55,6 +64,7 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.ticker  # noqa: E402,F401
 
 sys.path.insert(0, "python")
 from pi0 import io  # noqa: E402
@@ -66,19 +76,34 @@ GRID_B = Path("config/binning/grid_B_z_pt2_hermes.json")
 OURS = ["CxC", "Cu", "Sn"]
 LABEL = {"CxC": "C", "Cu": "Cu", "Sn": "Sn"}
 COLOR = {"CxC": "#1f77b4", "Cu": "#d62728", "Sn": "#2ca02c"}   # standard RG-D target colours
+HERMES_CSV = Path("analysis/scripts/hermes2007_pi0.csv")
+HERMES_NUCLEI = ["He", "Ne", "Kr", "Xe"]
+# none shared with RG-D (blue, red, green) or with CLAS6 Fe/Pb (orange, gold)
+HERMES_COLOR = {"He": "#9467bd", "Ne": "#8c564b", "Kr": "#e377c2", "Xe": "#7f7f7f"}
 M_P = 0.938272
 NU_CUT = 6.0
 Z_CUT = 0.2
 EPS = 1e-6
 
-# (variable, cuts on the other variables {variable: lower limit}, x label, x range)
+# (variable, cuts on the other variables {variable: lower limit}, x label, x range, x scale, ticks)
+# Ranges and ticks as the HERMES pi0 figure, read off it by eye (v0.2.6).
 PANELS = [
-    ("nu", {"z": Z_CUT}, r"$\nu$ [GeV]", (4.0, 10.0)),
-    ("z", {"nu": NU_CUT}, r"$z$", (0.1, 1.0)),
-    ("q2", {"nu": NU_CUT, "z": Z_CUT}, r"$Q^2$ [GeV$^2$]", None),
-    ("pt2", {"nu": NU_CUT, "z": Z_CUT}, r"$p_T^2$ [GeV$^2$]", None),
+    ("nu", {"z": Z_CUT}, r"$\nu$ [GeV]", (1.0, 25.0), "linear", [10, 20]),
+    ("z", {"nu": NU_CUT}, r"$z$", (0.0, 1.1), "linear", [0.2, 0.6, 1.0]),
+    ("q2", {"nu": NU_CUT, "z": Z_CUT}, r"$Q^2$ [GeV$^2$]", (0.8, 16.0), "log", [1, 10]),
+    ("pt2", {"nu": NU_CUT, "z": Z_CUT}, r"$p_T^2$ [GeV$^2$]", (0.01, 4.0), "log", [0.1, 1]),
 ]
+Y_RANGE = (0.4, 1.2)
 CUT_TEXT = {"nu": rf"$\nu>{NU_CUT:g}$ GeV", "z": rf"$z>{Z_CUT:g}$"}
+
+
+def load_hermes(path=HERMES_CSV):
+    """HERMES pi0 R_A from the HEPData copy: {(nucleus, var): [(mean, R, stat), ...]}."""
+    out = {}
+    with open(path) as f:
+        for r in csv.DictReader(line for line in f if not line.startswith("#")):
+            out.setdefault((r["nucleus"], r["var"]), []).append((float(r["mean"]), float(r["R"]), float(r["stat"])))
+    return out
 
 
 def axes_of(b):
@@ -141,7 +166,7 @@ def compute(data, cfg):
     b = cfg.binning
     edges = axes_of(b)
     rows = []
-    for var, cuts, _, _ in PANELS:
+    for var, cuts, *_ in PANELS:
         for k in range(len(edges[var]) - 1):
             b4, cells = selection(b, var, k, cuts)
             yd = extract_sum(data["LD2"], b4, cfg)
@@ -199,34 +224,48 @@ def main():
         for r in rows:
             w.writerow([r[k] for k in keys])
 
-    fig, axs = plt.subplots(2, 2, figsize=(9.5, 7.2), sharey=True)
-    for ax, (var, cuts, xlabel, xr) in zip(axs.flat, PANELS):
+    hermes = load_hermes()
+    fig, axs = plt.subplots(1, 4, figsize=(15.0, 4.6), sharey=True, gridspec_kw={"wspace": 0.0})
+    for ax, (var, cuts, xlabel, xr, scale, ticks) in zip(axs, PANELS):
         sub = [r for r in rows if r["var"] == var]
-        means = [r["mean"] for r in sub if np.isfinite(r["mean"])]
-        span = (xr[1] - xr[0]) if xr else ((max(means) - min(means)) if len(means) > 1 else 1.0)
+        ax.set_xscale(scale)
         for i, t in enumerate(OURS):
             pts = [(r["mean"], r["R"], r["err"]) for r in sub
                    if r["target"] == t and np.isfinite(r["R"]) and np.isfinite(r["mean"])]
             if not pts:
                 continue
             x, y, e = map(np.array, zip(*pts))
-            ax.errorbar(x + (i - 1) * 0.008 * span, y, yerr=e, fmt="o", ms=5, color=COLOR[t],
-                        capsize=2, lw=1.0, label=LABEL[t])
+            # small sideways offset between targets: multiplicative on a log axis
+            x = x * (1 + 0.03 * (i - 1)) if scale == "log" else x + (i - 1) * 0.008 * (xr[1] - xr[0])
+            ax.errorbar(x, y, yerr=e, fmt="o", ms=6, color=COLOR[t], capsize=2, lw=1.0,
+                        label=f"RG-D {LABEL[t]}")
+        for n in HERMES_NUCLEI:
+            pts = hermes.get((n, var), [])
+            if pts:
+                x, y, e = map(np.array, zip(*pts))
+                ax.errorbar(x, y, yerr=e, fmt="s", ms=6, mfc="none", mew=1.2, color=HERMES_COLOR[n],
+                            capsize=2, lw=1.0, label=f"HERMES {n}")
         ax.axhline(1.0, color="gray", lw=0.8, ls="--")
-        ax.set_xlabel(xlabel)
-        if xr:
-            ax.set_xlim(*xr)
-        ax.set_title(", ".join([CUT_TEXT[v] for v in cuts] + [xf_text]), fontsize=9)
-    for ax in axs[:, 0]:
-        ax.set_ylabel(r"$R_A^{\pi^0}$")
-    axs[0, 0].set_ylim(0.0, 1.4)
-    axs[0, 0].legend(frameon=False)
-    fig.suptitle(r"RG-D $\pi^0$ multiplicity ratio in the HERMES bins and cuts "
-                 r"(Airapetian et al., NPB 780 (2007) 1); stat. errors", fontsize=10.5)
-    fig.text(0.99, 0.005, label, ha="right", va="bottom", fontsize=8, color="0.4")
-    fig.tight_layout(rect=(0, 0.02, 1, 0.97))
+        ax.set_xlim(*xr)
+        ax.set_xticks(ticks)
+        ax.set_xticklabels([f"{v:g}" for v in ticks])
+        if scale == "linear":
+            ax.minorticks_on()
+        else:
+            ax.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+        ax.set_xlabel(xlabel, fontsize=12)
+        ax.set_title(", ".join([CUT_TEXT[v] for v in cuts] + [xf_text]), fontsize=9.5)
+    axs[0].set_ylabel(r"$R_A^{\pi^0}$", fontsize=13)
+    axs[0].set_ylim(*Y_RANGE)
+    h, lab = axs[0].get_legend_handles_labels()
+    fig.legend(h, lab, loc="center left", bbox_to_anchor=(1.0, 0.5), frameon=False, fontsize=11)
+    fig.suptitle(r"$\pi^0$ multiplicity ratio in the HERMES bins and cuts: RG-D (filled circles) vs HERMES "
+                 r"(open squares, Airapetian et al., NPB 780 (2007) 1, HEPData ins749249); stat. errors",
+                 fontsize=11)
+    fig.text(0.99, 0.0, label, ha="right", va="top", fontsize=9, color="0.4")
+    fig.tight_layout(rect=(0, 0.0, 1, 0.95))
     for ext in ("pdf", "png"):
-        fig.savefig(out / f"hermes_ra.{ext}", dpi=150)
+        fig.savefig(out / f"hermes_ra.{ext}", dpi=150, bbox_inches="tight")
     plt.close(fig)
 
     for t in OURS:
