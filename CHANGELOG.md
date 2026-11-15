@@ -3,6 +3,42 @@
 One entry per patch, newest first. The version is the one in `meson.build` and
 `python/pi0/__init__.py`, and the git tag of the commit that applies the patch.
 
+## v0.2.7 (2026-11-15), patch `v0.2.7.patch`
+
+Applies on top of v0.2.6. Run lists only: no change to the cuts, Stage A, Stage B or the extraction.
+Existing slims and results stay as they are (every run used so far is in the new lists).
+
+### Changed: `config/runs.json` now holds L. El Fassi's run lists
+- The inbending and outbending lists for LD2, CxC and CuSn are replaced with L. El Fassi's pass1
+  lists, read on 2026-11-15 from the IB and OB links of the SIDIS train
+  (`/work/clas12/rg-d/production/pass1/recon/<T>/dst/train/sidis/<IB|OB>/`).
+- Counts: outbending LD2 136, CxC 116, CuSn 290; inbending LD2 24, CxC 13, CuSn 37 (616 runs,
+  542 outbending). Up to v0.2.6: 574 runs from clas-framework `clas12/Runs.hpp`.
+- 42 runs added, none removed:
+  - outbending LD2: 18432
+  - outbending CxC: 18482, 18485, 18811, 18824
+  - outbending CuSn: 18560, 18562, 18637, 18664, 18674, 18687, 18688, 18689, 18726, 18737, 18739,
+    18874, 18887, 18897, 18899, 18901, 18917, 18931, 19061, 19075, 19124, 19128
+  - inbending CxC: 18369, 18370, 18371, 18400, 18401
+  - inbending CuSn: 18358 to 18366 and 18368 (the special-DC runs of `special_DC_runs_CuSn`).
+    Whether to keep them is to be decided before the inbending production.
+- Run 18432 (`LD2_trigger_rgd_v2_2_Q2_2_5`, a Q^2 > 2.5 trigger configuration) was excluded up to
+  v0.2.6. Decided 2026-11-15: included as a normal outbending LD2 run, as in L. El Fassi's list.
+- `special_DC_runs_CuSn` and `LD2_trigger_sets` are unchanged. `_comment` and `_generated` record the
+  new source.
+- The note's `tab:runs` no longer matches `runs.json`.
+
+### Tests (`test_farm.py`)
+- `test_runs_json_matches_the_note` becomes `test_runs_json_matches_lamiaas_run_lists` (new counts).
+- New `test_no_run_is_in_two_lists`; outbending total 515 -> 542.
+- `test_a_run_in_neither_list_is_rejected` now uses run 18418 (18432 is in a list now).
+- New `test_18432_is_in_the_outbending_ld2_list`.
+- 149 Python tests pass.
+
+### Docs and version
+- README: run-list section updated (source, counts, 18432).
+- Version 0.2.7.
+
 ## v0.2.6 (2026-11-14), patch `v0.2.6.patch`
 
 Applies on top of v0.2.5. Plots and labels only: no change to Stage A, Stage B, the extraction or any

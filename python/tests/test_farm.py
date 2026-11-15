@@ -46,15 +46,23 @@ def _dst(run: int, chunk: str = "00000-00004") -> str:
 # ---------------------------------------------------------------------------
 
 
-def test_runs_json_matches_the_note():
-    """tab:runs in the analysis note. If these drift, one of the two is wrong."""
+def test_runs_json_matches_lamiaas_run_lists():
+    """v0.2.7: L. El Fassi's pass1 run lists (SIDIS train IB/OB links), 616 runs. If these drift,
+    runs.json was edited by hand. (The analysis note's tab:runs still has the old Runs.hpp counts.)"""
     runs = load_runs(CONFIG_DIR)
-    assert len(runs["outbending"]["LD2"]) == 135
-    assert len(runs["outbending"]["CxC"]) == 112
-    assert len(runs["outbending"]["CuSn"]) == 268
+    assert len(runs["outbending"]["LD2"]) == 136
+    assert len(runs["outbending"]["CxC"]) == 116
+    assert len(runs["outbending"]["CuSn"]) == 290
     assert len(runs["inbending"]["LD2"]) == 24
-    assert len(runs["inbending"]["CxC"]) == 8
-    assert len(runs["inbending"]["CuSn"]) == 27
+    assert len(runs["inbending"]["CxC"]) == 13
+    assert len(runs["inbending"]["CuSn"]) == 37
+
+
+def test_no_run_is_in_two_lists():
+    """Every run has one target and one torus polarity."""
+    runs = load_runs(CONFIG_DIR)
+    lists = [set(runs[p][t]) for p in ("outbending", "inbending") for t in ("LD2", "CxC", "CuSn")]
+    assert sum(len(x) for x in lists) == len(set().union(*lists)) == 616
 
 
 def test_outbending_lists_are_pairwise_disjoint():
@@ -66,7 +74,7 @@ def test_outbending_lists_are_pairwise_disjoint():
     assert not (ld2 & cxc)
     assert not (ld2 & cusn)
     assert not (cxc & cusn)
-    assert len(ld2 | cxc | cusn) == 515
+    assert len(ld2 | cxc | cusn) == 542
 
 
 def test_cu_and_sn_share_the_cusn_run_list():
@@ -161,17 +169,23 @@ def test_inbending_files_are_rejected_from_an_outbending_production(tmp_path):
 
 
 def test_a_run_in_neither_list_is_rejected(tmp_path):
-    """18432 is LD2_trigger_rgd_v2_2_Q2_2_5 -- a Q2>2.5 trigger config, and in
-    NEITHER the inbending nor the outbending list. A Q2-biased trigger sculpts the
-    Q2 spectrum, and Q2 is a binning axis."""
+    """A run in no list is refused. 18418 is between the LD2 inbending (to 18336) and
+    outbending (from 18419) spans and in no list."""
     runs = load_runs(CONFIG_DIR)
-    assert 18432 not in runs_for(runs, "outbending", "LD2")
-    assert 18432 not in runs_for(runs, "inbending", "LD2")
-    assert 18432 in runs["LD2_trigger_sets"]["LD2_trigger_rgd_v2_2_Q2_2_5"]
+    assert all(18418 not in runs[p][t] for p in ("outbending", "inbending") for t in ("LD2", "CxC", "CuSn"))
     cfg = load_farm_config(_cfg(tmp_path))
-    acc, rej = discover_inputs(cfg, runs, listing=[_dst(18432)])
+    acc, rej = discover_inputs(cfg, runs, listing=[_dst(18418)])
     assert acc == []
     assert len(rej) == 1
+
+
+def test_18432_is_in_the_outbending_ld2_list():
+    """v0.2.7, decided 2026-11-15: 18432 (the only run of LD2_trigger_rgd_v2_2_Q2_2_5, a
+    Q2 > 2.5 trigger configuration) is in L. El Fassi's outbending LD2 list and is
+    processed like any other run. Up to v0.2.6 it was in neither list."""
+    runs = load_runs(CONFIG_DIR)
+    assert 18432 in runs_for(runs, "outbending", "LD2")
+    assert 18432 in runs["LD2_trigger_sets"]["LD2_trigger_rgd_v2_2_Q2_2_5"]
 
 
 def test_exclude_runs_is_honoured(tmp_path):

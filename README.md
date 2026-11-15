@@ -468,8 +468,11 @@ carrying the extraction stage's dependencies.
 
 ### The run lists — read this before your first submission
 
-`config/runs.json` holds the RG-D run lists, transcribed from clas-framework's
-`clas12/Runs.hpp`. Both drivers **refuse any file whose run is not in the
+`config/runs.json` holds the RG-D run lists. Since v0.2.7 they are L. El Fassi's
+pass1 lists, read from the IB and OB links of the SIDIS train
+(`/work/clas12/rg-d/production/pass1/recon/<T>/dst/train/sidis/<IB|OB>/`): 616 runs,
+74 inbending and 542 outbending. Up to v0.2.6 they were transcribed from
+clas-framework's `clas12/Runs.hpp` (574 runs). Both drivers **refuse any file whose run is not in the
 requested (polarity, target) list**.
 
 This is not bookkeeping. Inbending and outbending runs live in the **same `/mss`
@@ -479,7 +482,7 @@ torus polarities into one dataset and nothing downstream can notice. The note
 (`tab:runs`) records that the original lists were *"not applied by any binary"*;
 this is what applies them.
 
-Measured against clas-framework's real LD₂ file list (`ld2_files.dat`, 30,866
+Measured (with the pre-v0.2.7 lists) against clas-framework's real LD₂ file list (`ld2_files.dat`, 30,866
 files, named as the input in `swif2_pi0_skim.py`'s own docstring):
 
 ```
@@ -490,8 +493,9 @@ files rejected :  2895   (9.4%)
                          LD2_trigger_rgd_v2_2_Q2_2_5, a Q2 > 2.5 trigger config
 ```
 
-Run 18432 is the one to worry about: a Q²-biased trigger sculpts the Q² spectrum,
-and **Q² is a Grid A binning axis**.
+Run 18432 was excluded up to v0.2.6 because a Q²-biased trigger could sculpt the
+Q² spectrum, and **Q² is a Grid A binning axis**. Since v0.2.7 (decided 2026-11-15)
+it is a normal outbending LD₂ run, as in L. El Fassi's list.
 
 Four targets, three run lists — Cu and Sn are two foils in one assembly exposed
 in the *same* CuSn runs and separated only by the electron `vz` window, so
