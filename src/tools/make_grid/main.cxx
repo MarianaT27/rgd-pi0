@@ -422,6 +422,29 @@ struct InputSummary {
     return obj ? std::string(obj->GetTitle()) : std::string{};
 }
 
+/// The torus polarity of the inputs, from their Stage A provenance (v1.0.0).
+/// make_grid applies the pairing cuts of that polarity's cuts.json block, so the
+/// inputs must all record the same one, and every input must record one.
+[[nodiscard]] std::string inputs_polarity(const std::vector<std::string>& inputs) {
+    std::string pol;
+    for (const std::string& path : inputs) {
+        std::unique_ptr<TFile> f(TFile::Open(path.c_str(), "READ"));
+        if (f == nullptr || f->IsZombie()) throw std::runtime_error("cannot open input: " + path);
+        const std::string p = read_provenance(*f, "polarity");
+        if (p != "outbending" && p != "inbending") {
+            throw std::runtime_error("input " + path + " records polarity '" + p +
+                                     "' in its Stage A provenance; make_grid needs outbending or inbending to "
+                                     "choose the cuts.json polarity block.");
+        }
+        if (pol.empty()) pol = p;
+        if (p != pol) {
+            throw std::runtime_error("the inputs mix torus polarities (" + pol + " and " + p + ", the latter in " +
+                                     path + "); one grid is made from one polarity.");
+        }
+    }
+    return pol;
+}
+
 /// Accumulated samples. Deliberately four flat vectors rather than a vector of
 /// structs: they are sorted independently (each axis is its own marginal), and
 /// at production scale these are the program's whole memory footprint.
@@ -788,7 +811,8 @@ int main(int argc, char* argv[]) {
     }
 
     try {
-        const pi0::Cuts cuts = pi0::Cuts::load(args.config);
+        const std::string polarity = inputs_polarity(args.inputs);
+        const pi0::Cuts cuts = pi0::Cuts::load(args.config, polarity);
         const std::string config_sha = pi0::util::sha256_file(args.config);
 
         // Shape: config first, command line overrides. Which one won is recorded
@@ -805,6 +829,7 @@ int main(int argc, char* argv[]) {
         std::cout << "make_grid\n"
                   << "  config     : " << args.config << "  (sha256 " << config_sha.substr(0, 16) << "...)\n"
                   << "  inputs     : " << args.inputs.size() << '\n'
+                  << "  polarity   : " << polarity << "  (from the inputs' Stage A provenance)\n"
                   << "  Grid A     : " << n_q2 << " x " << n_xb << " (Q2, xB)"
                   << (na_overridden ? "   [--na override]" : "   [from config]") << '\n'
                   << "  Grid B     : " << n_z << " x " << n_pt2 << " (z, pT2)"
@@ -1104,6 +1129,7 @@ int main(int argc, char* argv[]) {
             p["config.path"] = args.config;
             p["config.sha256"] = config_sha;
             p["beam.energy_gev"] = cuts.beam.energy_gev;
+            p["polarity"] = cuts.beam.polarity;
             p["shape.source"] = (which == "A" ? na_overridden : nb_overridden)
                                     ? std::string("--na/--nb on the command line, OVERRIDING config binning.grid_" +
                                                   std::string(which == "A" ? "a" : "b") +

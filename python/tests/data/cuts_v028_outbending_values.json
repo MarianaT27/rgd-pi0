@@ -1,0 +1,96 @@
+{
+  "_comment": "The cut VALUES (comments stripped) of the electron, photon, pairing and vertex blocks of config/cuts.json as of v0.2.8 (outbending only then). test_cuts_polarity.py checks that /polarities/outbending of the current file holds exactly these values, so the v1.0.0 restructure changed no outbending cut.",
+  "electron": {
+    "chi2pid_min": -5.0,
+    "chi2pid_max": 5.0,
+    "min_momentum_gev": 1.8,
+    "sampling_fraction": {
+      "n_sigma": 3.5
+    },
+    "pcal_lv_min_cm": 9.0,
+    "pcal_lw_min_cm": 9.0,
+    "dc_edge_r1_cm": 1.88,
+    "dc_edge_r2_cm": 2.08,
+    "dc_edge_r3_cm": 8.62,
+    "trigger": {
+      "pid": 11,
+      "require_negative_status": true,
+      "status_abs_min": 2000,
+      "status_abs_max": 4000
+    }
+  },
+  "photon": {
+    "pid": 22,
+    "gbt_threshold": 0.78,
+    "gbt_pass": 1,
+    "allow_rga_fallback": true,
+    "min_energy_gev": 0.2,
+    "require_pcal_energy": true,
+    "theta_min_deg": 5.0,
+    "theta_max_deg": 35.0,
+    "pcal_lv_min_cm": 14.0,
+    "pcal_lw_min_cm": 14.0,
+    "beta_min": 0.9,
+    "beta_max": 1.1
+  },
+  "pairing": {
+    "pi0_mass_gev": 0.1349768,
+    "mass_window_gev": 0.2,
+    "min_mgg_gev": 0.001,
+    "e_gamma_min_angle_deg": 8.0,
+    "opening_angle": {
+      "a_deg": 17.561,
+      "b_inv_gev": 0.756,
+      "offset_deg": 1.0
+    },
+    "z_min": 0.0,
+    "z_max": 1.0
+  },
+  "vertex": {
+    "targets": {
+      "ld2": {
+        "correction_enabled": false,
+        "rule": "raw_window",
+        "vz_min_cm": -15.0,
+        "vz_max_cm": 5.0
+      },
+      "cu": {
+        "correction_enabled": true,
+        "rule": "corrected_peaks",
+        "n_sigma": 3.0,
+        "peaks": [
+          {
+            "mu_cm": -7.861,
+            "sigma_cm": 0.415
+          }
+        ]
+      },
+      "sn": {
+        "correction_enabled": true,
+        "rule": "corrected_peaks",
+        "n_sigma": 3.0,
+        "peaks": [
+          {
+            "mu_cm": -2.916,
+            "sigma_cm": 0.37
+          }
+        ]
+      },
+      "cxc": {
+        "correction_enabled": true,
+        "rule": "corrected_peaks",
+        "n_sigma": 3.0,
+        "peaks": [
+          {
+            "mu_cm": -7.887,
+            "sigma_cm": 0.395
+          },
+          {
+            "mu_cm": -2.906,
+            "sigma_cm": 0.373
+          }
+        ]
+      }
+    }
+  }
+}

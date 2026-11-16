@@ -200,7 +200,8 @@ cuts, and the GBT photon selection. Writes one entry per surviving DIS event.
     --input  /path/to/rec_clas_018500.hipo \
     --output slim/LD2_018500.root \
     --config config/cuts.json \
-    --target LD2
+    --target LD2 \
+    --polarity outbending
 ```
 
 | Option | Required | Meaning |
@@ -209,6 +210,7 @@ cuts, and the GBT photon selection. Writes one entry per surviving DIS event.
 | `--output <slim.root>` | yes | Slim ROOT file to create (overwritten if present). |
 | `--config <cuts.json>` | yes | Every threshold comes from here. |
 | `--target <LD2\|CxC\|Cu\|Sn>` | yes | Selects the vertex window. **For Cu/Sn this *is* the target assignment** — the two foils are distinguished only by $v_z$. |
+| `--polarity <outbending\|inbending>` | yes (v1.0.0) | Torus polarity of the run. Picks the `/polarities/<polarity>` block of `cuts.json` (electron, photon, pairing, vertex cuts) and the sampling-fraction table, and is written to the slim provenance as `polarity`. `pi0.batch` and `pi0.local_batch` pass it from the farm config. Nothing in Stage A checks it against `runs.json`; the run-list filter of `pi0.batch` does. |
 | `--run <N>` | no | Override the run used to pick the GBT model. Normally read from `RUN::config`; pass only if the file's run is absent or wrong. |
 | `--max-events <N>` | no | Stop after N tag-0 events. For smoke tests. The output is a **prefix**, not a sample — stamped into the provenance so a partial run cannot pass for a full one. |
 | `--threads <N>` | no | Parallelise the GBT scoring. Default 1 (the farm path, streaming). Output is byte-identical to `--threads 1` for any N. `N>1` buffers events — bounded runs only. |
@@ -247,7 +249,7 @@ unrecoverable.
 | Option | Required | Meaning |
 | --- | --- | --- |
 | `--input <slim.root>` | yes | Repeat for more. Edges are quantiles of the pooled sample; order affects only the provenance listing. |
-| `--config <cuts.json>` | yes | Grid shape, pairing cuts and the z window come from here. Its hash is stamped into both outputs and checked against what each input recorded at skim time. |
+| `--config <cuts.json>` | yes | Grid shape, pairing cuts and the z window come from here. Its hash is stamped into both outputs and checked against what each input recorded at skim time. The polarity block is the one the inputs' provenance names (they must agree, v1.0.0). |
 | `--out-a <json>` | yes | Grid A = $(Q^2, x_B)$, per **event**. |
 | `--out-b <json>` | yes | Grid B = $(z, p_T^2)$, per **π⁰**. |
 | `--na WxH` | no | Override `binning.grid_a`, e.g. `8x7`. See the warning below. |
@@ -295,7 +297,7 @@ seeded pre-pass; pass 1 bins, with mixing reduced to a stateless lookup against 
 | --- | --- | --- |
 | `--input <slim.root>` | yes | A Stage A file (TTree `events`). **Repeatable** — see below. |
 | `--output <binned.root>` | yes | Binned ROOT file to create. |
-| `--config <cuts.json>` | yes | Every threshold and every axis. |
+| `--config <cuts.json>` | yes | Every threshold and every axis. The polarity block is taken from the inputs' Stage A provenance (`polarity`); every input must carry the same one, or Stage B refuses (v1.0.0). |
 | `--grid-a <json>` | yes | The frozen $(Q^2,x_B)$ grid. Its hash is stamped into the output. |
 | `--grid-b <json>` | yes | The frozen $(z,p_T^2)$ grid. Ditto. |
 | `--max-events <N>` | no | Stop after N entries **in total across all inputs**, not per input. **Both passes are truncated identically** — a pool built from more events than were binned would estimate the background from a sample the spectra never saw. |
@@ -511,10 +513,11 @@ asserting it).
 ```jsonc
 { "farm": {
     "target": "LD2",              // LD2 | CxC | Cu | Sn  (NOT CuSn — that is a run list)
-    "polarity": "outbending",     // selects the run list; flipping it selects inbending
+    "polarity": "outbending",     // selects the run list AND (v1.0.0) the cuts.json block: the job passes --polarity
     "inputs": ["/mss/clas12/rg-d/production/pass1/recon/LD2/dst/recon/"],
     "files_per_job": 1,
     "exclude_runs": [],
+    // "only_runs": [18358, 18359],  // optional (v1.0.0): keep ONLY these runs of the list
     "output_dir": "/volatile/clas12/ouillon/rgd-pi0/LD2",
     "log_dir":    "/volatile/clas12/ouillon/rgd-pi0/LD2/logs",
     "swif2": {
@@ -527,6 +530,13 @@ asserting it).
     "env": {}
 } }
 ```
+
+Inbending (v1.0.0) has its own configs in `config/farm/v100_IB/`: LD2, CxC, Cu and
+Sn, plus `Cu_specialDC` and `Sn_specialDC` for the CuSn runs with the special DC
+configuration (18358 to 18366 and 18368). The main Cu and Sn configs exclude those
+runs (`exclude_runs`) and the special-DC ones keep only them (`only_runs`), so they
+land in their own output folders and are checked before they go into Stage B.
+Inbending is analysed apart from outbending: its own Stage B chain and results.
 
 Two nesting details are inherited from clas-framework's *code* (its struct layout
 suggests otherwise, and copying that gets them backwards): **`env` is a child of

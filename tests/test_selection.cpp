@@ -67,9 +67,18 @@ namespace {
 const char* cuts_json_path() { return PI0_CUTS_JSON; }
 
 const pi0::Cuts& shipped_cuts() {
-    static const pi0::Cuts c = pi0::Cuts::load(cuts_json_path());
+    static const pi0::Cuts c = pi0::Cuts::load(cuts_json_path(), "outbending");
     return c;
 }
+
+/// The shipped config's INBENDING block (v1.0.0).
+const pi0::Cuts& shipped_ib_cuts() {
+    static const pi0::Cuts c = pi0::Cuts::load(cuts_json_path(), "inbending");
+    return c;
+}
+
+/// The outbending block of a parsed config, for tests that spoil one key of it.
+nlohmann::json& ob(nlohmann::json& doc) { return doc["polarities"]["outbending"]; }
 
 /// Write `doc` to a scratch file and return the path. Used to build a config
 /// that is the real one MINUS one key, so the loader is tested against a
@@ -387,35 +396,35 @@ TEST_CASE("Cuts::load refuses a bad polarization table", "[cuts][polarization][l
         nlohmann::json doc = parsed_cuts_json();
         doc["bsa"]["polarization"]["periods"][1]["runs"][0] = 18400;
         const std::string path = write_temp_json(doc, "pol_overlap");
-        CHECK_THROWS_WITH(pi0::Cuts::load(path), ContainsSubstring("overlaps"));
+        CHECK_THROWS_WITH(pi0::Cuts::load(path, "outbending"), ContainsSubstring("overlaps"));
         std::remove(path.c_str());
     }
     SECTION("a gap between periods") {
         nlohmann::json doc = parsed_cuts_json();
         doc["bsa"]["polarization"]["periods"][1]["runs"][0] = 18410;
         const std::string path = write_temp_json(doc, "pol_gap");
-        CHECK_THROWS_WITH(pi0::Cuts::load(path), ContainsSubstring("gap"));
+        CHECK_THROWS_WITH(pi0::Cuts::load(path, "outbending"), ContainsSubstring("gap"));
         std::remove(path.c_str());
     }
     SECTION("a signed (negative) P") {
         nlohmann::json doc = parsed_cuts_json();
         doc["bsa"]["polarization"]["periods"][0]["P"] = -0.79228;
         const std::string path = write_temp_json(doc, "pol_sign");
-        CHECK_THROWS_WITH(pi0::Cuts::load(path), ContainsSubstring("MAGNITUDE"));
+        CHECK_THROWS_WITH(pi0::Cuts::load(path, "outbending"), ContainsSubstring("MAGNITUDE"));
         std::remove(path.c_str());
     }
     SECTION("P given in percent") {
         nlohmann::json doc = parsed_cuts_json();
         doc["bsa"]["polarization"]["periods"][0]["P"] = 79.228;
         const std::string path = write_temp_json(doc, "pol_percent");
-        CHECK_THROWS_WITH(pi0::Cuts::load(path), ContainsSubstring("not in (0, 1]"));
+        CHECK_THROWS_WITH(pi0::Cuts::load(path, "outbending"), ContainsSubstring("not in (0, 1]"));
         std::remove(path.c_str());
     }
     SECTION("an empty table") {
         nlohmann::json doc = parsed_cuts_json();
         doc["bsa"]["polarization"]["periods"] = nlohmann::json::array();
         const std::string path = write_temp_json(doc, "pol_empty");
-        CHECK_THROWS_WITH(pi0::Cuts::load(path), ContainsSubstring("is empty"));
+        CHECK_THROWS_WITH(pi0::Cuts::load(path, "outbending"), ContainsSubstring("is empty"));
         std::remove(path.c_str());
     }
 }
@@ -424,31 +433,31 @@ TEST_CASE("Cuts::load THROWS on a missing key, and names it", "[cuts][loud]") {
     // Every key below is deleted from an OTHERWISE COMPLETE copy of the real
     // config, so each case isolates exactly one missing key.
     const auto key = GENERATE(std::string("beam.energy_gev"),
-                              std::string("beam.polarity"),
-                              std::string("electron.min_momentum_gev"),
-                              std::string("electron.chi2pid_min"),
-                              std::string("electron.sampling_fraction.n_sigma"),
-                              std::string("electron.trigger.status_abs_max"),
+                              std::string("polarities.outbending"),
+                              std::string("polarities.outbending.electron.min_momentum_gev"),
+                              std::string("polarities.outbending.electron.chi2pid_min"),
+                              std::string("polarities.outbending.electron.sampling_fraction.n_sigma"),
+                              std::string("polarities.outbending.electron.trigger.status_abs_max"),
                               std::string("dis.q2_min"),
-                              std::string("photon.gbt_threshold"),
-                              std::string("photon.allow_rga_fallback"),
-                              std::string("photon.beta_max"),
-                              std::string("pairing.mass_window_gev"),
-                              std::string("pairing.opening_angle.a_deg"),
+                              std::string("polarities.outbending.photon.gbt_threshold"),
+                              std::string("polarities.outbending.photon.allow_rga_fallback"),
+                              std::string("polarities.outbending.photon.beta_max"),
+                              std::string("polarities.outbending.pairing.mass_window_gev"),
+                              std::string("polarities.outbending.pairing.opening_angle.a_deg"),
                               // The /vertex block. Until these were read, this
                               // block sat in cuts.json unread while a hard-coded
                               // table in vertex/VzCorrector.cpp supplied the
                               // windows -- the "declared, set, never read"
                               // defect this file exists to end. A missing key
                               // here must be as loud as any other.
-                              std::string("vertex.targets.ld2.vz_min_cm"),
-                              std::string("vertex.targets.ld2.rule"),
-                              std::string("vertex.targets.ld2.correction_enabled"),
-                              std::string("vertex.targets.cu.n_sigma"),
-                              std::string("vertex.targets.cu.peaks"),
-                              std::string("vertex.targets.sn.peaks"),
-                              std::string("vertex.targets.cxc.peaks"),
-                              std::string("vertex.targets.cxc.correction_enabled"));
+                              std::string("polarities.outbending.vertex.targets.ld2.vz_min_cm"),
+                              std::string("polarities.outbending.vertex.targets.ld2.rule"),
+                              std::string("polarities.outbending.vertex.targets.ld2.correction_enabled"),
+                              std::string("polarities.outbending.vertex.targets.cu.n_sigma"),
+                              std::string("polarities.outbending.vertex.targets.cu.peaks"),
+                              std::string("polarities.outbending.vertex.targets.sn.peaks"),
+                              std::string("polarities.outbending.vertex.targets.cxc.peaks"),
+                              std::string("polarities.outbending.vertex.targets.cxc.correction_enabled"));
 
     INFO("deleted key: " << key);
     nlohmann::json doc = parsed_cuts_json();
@@ -457,13 +466,13 @@ TEST_CASE("Cuts::load THROWS on a missing key, and names it", "[cuts][loud]") {
 
     // Not merely "throws": the message must name the key, or the failure is a
     // puzzle rather than a report.
-    REQUIRE_THROWS_WITH(pi0::Cuts::load(path), ContainsSubstring(key));
+    REQUIRE_THROWS_WITH(pi0::Cuts::load(path, "outbending"), ContainsSubstring(key));
     std::remove(path.c_str());
 }
 
 TEST_CASE("Cuts::load THROWS rather than defaulting", "[cuts][loud]") {
     SECTION("a nonexistent file") {
-        REQUIRE_THROWS_AS(pi0::Cuts::load("/nonexistent/definitely/not/cuts.json"),
+        REQUIRE_THROWS_AS(pi0::Cuts::load("/nonexistent/definitely/not/cuts.json", "outbending"),
                           std::runtime_error);
     }
 
@@ -473,64 +482,141 @@ TEST_CASE("Cuts::load THROWS rather than defaulting", "[cuts][loud]") {
             std::ofstream out(path);
             out << "this is not json";
         }
-        REQUIRE_THROWS_AS(pi0::Cuts::load(path), std::runtime_error);
+        REQUIRE_THROWS_AS(pi0::Cuts::load(path, "outbending"), std::runtime_error);
         std::remove(path.c_str());
     }
 
     SECTION("an empty object -- i.e. every key missing at once") {
         const std::string path = write_temp_json(nlohmann::json::object(), "empty");
-        REQUIRE_THROWS_AS(pi0::Cuts::load(path), std::runtime_error);
+        REQUIRE_THROWS_AS(pi0::Cuts::load(path, "outbending"), std::runtime_error);
         std::remove(path.c_str());
     }
 
     SECTION("a key of the wrong type") {
         nlohmann::json doc = parsed_cuts_json();
-        doc["electron"]["min_momentum_gev"] = "2.0";  // a string, not a number
+        ob(doc)["electron"]["min_momentum_gev"] = "2.0";  // a string, not a number
         const std::string path = write_temp_json(doc, "wrongtype");
-        REQUIRE_THROWS_WITH(pi0::Cuts::load(path), ContainsSubstring("min_momentum_gev"));
+        REQUIRE_THROWS_WITH(pi0::Cuts::load(path, "outbending"), ContainsSubstring("min_momentum_gev"));
         std::remove(path.c_str());
     }
 
     SECTION("an unknown polarity") {
-        nlohmann::json doc = parsed_cuts_json();
-        doc["beam"]["polarity"] = "sideways";
-        const std::string path = write_temp_json(doc, "polarity");
-        REQUIRE_THROWS_WITH(pi0::Cuts::load(path), ContainsSubstring("polarity"));
-        std::remove(path.c_str());
+        // v1.0.0: the polarity is the caller's, not the file's, and only the two
+        // spellings exist. Anything else is refused before a key is read.
+        REQUIRE_THROWS_WITH(pi0::Cuts::load(cuts_json_path(), "sideways"), ContainsSubstring("polarity"));
+        REQUIRE_THROWS_WITH(pi0::Cuts::load(cuts_json_path(), ""), ContainsSubstring("polarity"));
     }
 }
 
-TEST_CASE("Cuts::load refuses an inbending config", "[cuts][loud][vertex]") {
-    // NOT a limitation that snuck in -- a refusal that replaces a silent wrong
-    // answer. cuts.json's /vertex block is the OUTBENDING set, as its beam block
-    // says of every polarity-dependent number in the file. The windows used to
-    // come from a hard-coded table that ALSO carried inbending values the file
-    // never claimed to have; that table is deleted, so there is now nothing
-    // behind an inbending request but the outbending numbers.
-    //
-    // Loading them for inbending data would be exactly the silent
-    // wrong-number failure that deleting the table was meant to prevent, so the
-    // loader refuses. Adding inbending means adding a per-polarity /vertex
-    // block, which is what cuts.json's own _polarity_comment prescribes.
-    nlohmann::json doc = parsed_cuts_json();
-    doc["beam"]["polarity"] = "inbending";
-    const std::string path = write_temp_json(doc, "inbending");
+TEST_CASE("Cuts::load reads the inbending block: the common aspects note's IB values", "[cuts][inbending]") {
+    // v1.0.0. Up to v0.2.8 the loader REFUSED inbending, because the file held
+    // the outbending windows only and nothing else stood behind an inbending
+    // request. Since v1.0.0 /polarities/inbending is a complete block, with the
+    // electron values of the RG-D common aspects analysis note (v3.1): DC edges
+    // Table 5 (IB row), v_z windows Table 6 (CuSn IB, CxC IB), the rest Table 7.
+    const pi0::Cuts& c = shipped_ib_cuts();
+    CHECK(c.beam.polarity == "inbending");
 
-    // The message must say WHY, not merely that something is wrong.
-    REQUIRE_THROWS_WITH(pi0::Cuts::load(path), ContainsSubstring("OUTBENDING"));
-    std::remove(path.c_str());
+    SECTION("DC edges: Table 5, IB regional averages") {
+        CHECK_THAT(c.electron.dc_edge_r1_cm, WithinAbs(2.58, 1e-12));
+        CHECK_THAT(c.electron.dc_edge_r2_cm, WithinAbs(2.51, 1e-12));
+        CHECK_THAT(c.electron.dc_edge_r3_cm, WithinAbs(1.37, 1e-12));
+    }
 
-    // ...and the shipped file is outbending, so this refusal is not firing on
-    // the real config.
-    CHECK(shipped_cuts().beam.polarity == "outbending");
+    SECTION("vertex: Table 6, IB rows; LD2 the same fixed window as outbending") {
+        REQUIRE(c.vertex.cu.peaks.size() == 1u);
+        CHECK_THAT(c.vertex.cu.peaks[0].mu_cm, WithinAbs(-7.765, 1e-12));
+        CHECK_THAT(c.vertex.cu.peaks[0].sigma_cm, WithinAbs(0.321, 1e-12));
+        REQUIRE(c.vertex.sn.peaks.size() == 1u);
+        CHECK_THAT(c.vertex.sn.peaks[0].mu_cm, WithinAbs(-2.812, 1e-12));
+        CHECK_THAT(c.vertex.sn.peaks[0].sigma_cm, WithinAbs(0.315, 1e-12));
+        REQUIRE(c.vertex.cxc.peaks.size() == 2u);
+        CHECK_THAT(c.vertex.cxc.peaks[0].mu_cm, WithinAbs(-7.670, 1e-12));
+        CHECK_THAT(c.vertex.cxc.peaks[0].sigma_cm, WithinAbs(0.313, 1e-12));
+        CHECK_THAT(c.vertex.cxc.peaks[1].mu_cm, WithinAbs(-2.713, 1e-12));
+        CHECK_THAT(c.vertex.cxc.peaks[1].sigma_cm, WithinAbs(0.307, 1e-12));
+        // Upstream = Cu, downstream = Sn, as for outbending (note, Table 12 caption).
+        CHECK(c.vertex.cu.peaks[0].mu_cm < c.vertex.sn.peaks[0].mu_cm);
+        CHECK(c.vertex.cu.correction_enabled);
+        CHECK(c.vertex.sn.correction_enabled);
+        CHECK(c.vertex.cxc.correction_enabled);
+        CHECK_THAT(c.vertex.cu.n_sigma, WithinAbs(3.0, 1e-12));
+        CHECK(c.vertex.ld2.rule == pi0::vertex::VzRule::RawWindow);
+        CHECK_FALSE(c.vertex.ld2.correction_enabled);
+        CHECK_THAT(c.vertex.ld2.vz_min_cm, WithinAbs(-15.0, 1e-12));
+        CHECK_THAT(c.vertex.ld2.vz_max_cm, WithinAbs(5.0, 1e-12));
+    }
+
+    SECTION("everything else of the electron is Table 7, the same as outbending") {
+        const pi0::Cuts& o = shipped_cuts();
+        CHECK(c.electron.chi2pid_min == o.electron.chi2pid_min);
+        CHECK(c.electron.chi2pid_max == o.electron.chi2pid_max);
+        CHECK(c.electron.min_momentum_gev == o.electron.min_momentum_gev);
+        CHECK(c.electron.sf_n_sigma == o.electron.sf_n_sigma);
+        CHECK(c.electron.pcal_lv_min_cm == o.electron.pcal_lv_min_cm);
+        CHECK(c.electron.pcal_lw_min_cm == o.electron.pcal_lw_min_cm);
+        CHECK(c.electron.status_min == o.electron.status_min);
+        CHECK(c.electron.status_max == o.electron.status_max);
+    }
+
+    SECTION("photon and pairing: a separate block, with the outbending values as of v1.0.0") {
+        const pi0::Cuts& o = shipped_cuts();
+        CHECK(c.photon.gbt_threshold == o.photon.gbt_threshold);
+        CHECK(c.photon.min_energy_gev == o.photon.min_energy_gev);
+        CHECK(c.photon.theta_min_deg == o.photon.theta_min_deg);
+        CHECK(c.photon.theta_max_deg == o.photon.theta_max_deg);
+        CHECK(c.photon.pcal_lv_min_cm == o.photon.pcal_lv_min_cm);
+        CHECK(c.photon.pcal_lw_min_cm == o.photon.pcal_lw_min_cm);
+        CHECK(c.photon.beta_min == o.photon.beta_min);
+        CHECK(c.photon.beta_max == o.photon.beta_max);
+        CHECK(c.photon.gbt_pass == o.photon.gbt_pass);
+        CHECK(c.photon.allow_rga_fallback == o.photon.allow_rga_fallback);
+        CHECK(c.pairing.mass_window_gev == o.pairing.mass_window_gev);
+        CHECK(c.pairing.min_mgg_gev == o.pairing.min_mgg_gev);
+        CHECK(c.pairing.e_gamma_min_angle_deg == o.pairing.e_gamma_min_angle_deg);
+        CHECK(c.pairing.open_a_deg == o.pairing.open_a_deg);
+        CHECK(c.pairing.open_b_inv_gev == o.pairing.open_b_inv_gev);
+        CHECK(c.pairing.open_offset_deg == o.pairing.open_offset_deg);
+        CHECK(c.sidis.z_min == o.sidis.z_min);
+        CHECK(c.sidis.z_max == o.sidis.z_max);
+    }
+
+    SECTION("the polarity-independent blocks are shared") {
+        const pi0::Cuts& o = shipped_cuts();
+        CHECK(c.beam.energy_gev == o.beam.energy_gev);
+        CHECK(c.dis.q2_min == o.dis.q2_min);
+        CHECK(c.bsa.polarization.size() == o.bsa.polarization.size());
+        CHECK(c.mixing.donors_per_bin == o.mixing.donors_per_bin);
+    }
+}
+
+TEST_CASE("Cuts::load reads ONLY the requested polarity block", "[cuts][inbending][loud]") {
+    SECTION("inbending loads without the outbending block, and vice versa") {
+        nlohmann::json doc = parsed_cuts_json();
+        doc["polarities"].erase("outbending");
+        const std::string path = write_temp_json(doc, "ib_only");
+        CHECK_NOTHROW(pi0::Cuts::load(path, "inbending"));
+        REQUIRE_THROWS_WITH(pi0::Cuts::load(path, "outbending"), ContainsSubstring("polarities.outbending"));
+        std::remove(path.c_str());
+    }
+    SECTION("a missing inbending key is named with its polarity") {
+        nlohmann::json doc = parsed_cuts_json();
+        doc["polarities"]["inbending"]["electron"].erase("dc_edge_r2_cm");
+        const std::string path = write_temp_json(doc, "ib_missing");
+        REQUIRE_THROWS_WITH(pi0::Cuts::load(path, "inbending"),
+                            ContainsSubstring("polarities.inbending.electron.dc_edge_r2_cm"));
+        // The outbending block is untouched and still loads.
+        CHECK_NOTHROW(pi0::Cuts::load(path, "outbending"));
+        std::remove(path.c_str());
+    }
 }
 
 TEST_CASE("Cuts::load refuses a vertex block that disagrees with itself", "[cuts][loud][vertex]") {
     SECTION("an unknown rule") {
         nlohmann::json doc = parsed_cuts_json();
-        doc["vertex"]["targets"]["cu"]["rule"] = "voigt_window";
+        ob(doc)["vertex"]["targets"]["cu"]["rule"] = "voigt_window";
         const std::string path = write_temp_json(doc, "vzrule");
-        REQUIRE_THROWS_WITH(pi0::Cuts::load(path), ContainsSubstring("vertex.targets.cu.rule"));
+        REQUIRE_THROWS_WITH(pi0::Cuts::load(path, "outbending"), ContainsSubstring("vertex.targets.cu.rule"));
         std::remove(path.c_str());
     }
 
@@ -540,9 +626,9 @@ TEST_CASE("Cuts::load refuses a vertex block that disagrees with itself", "[cuts
         // correction off would have the skim cut a raw vertex against corrected
         // peaks -- a window silently drawn around the wrong quantity.
         nlohmann::json doc = parsed_cuts_json();
-        doc["vertex"]["targets"]["cu"]["correction_enabled"] = false;
+        ob(doc)["vertex"]["targets"]["cu"]["correction_enabled"] = false;
         const std::string path = write_temp_json(doc, "vzcorr");
-        REQUIRE_THROWS_WITH(pi0::Cuts::load(path),
+        REQUIRE_THROWS_WITH(pi0::Cuts::load(path, "outbending"),
                             ContainsSubstring("vertex.targets.cu.correction_enabled"));
         std::remove(path.c_str());
     }
@@ -550,9 +636,9 @@ TEST_CASE("Cuts::load refuses a vertex block that disagrees with itself", "[cuts
     SECTION("an empty peak list") {
         // Accepts nothing at all -- a selection nobody meant to write.
         nlohmann::json doc = parsed_cuts_json();
-        doc["vertex"]["targets"]["sn"]["peaks"] = nlohmann::json::array();
+        ob(doc)["vertex"]["targets"]["sn"]["peaks"] = nlohmann::json::array();
         const std::string path = write_temp_json(doc, "vzpeaks");
-        REQUIRE_THROWS_WITH(pi0::Cuts::load(path), ContainsSubstring("vertex.targets.sn.peaks"));
+        REQUIRE_THROWS_WITH(pi0::Cuts::load(path, "outbending"), ContainsSubstring("vertex.targets.sn.peaks"));
         std::remove(path.c_str());
     }
 
@@ -560,9 +646,9 @@ TEST_CASE("Cuts::load refuses a vertex block that disagrees with itself", "[cuts
         // The message must locate the defect inside the array, not just say
         // "peaks is wrong".
         nlohmann::json doc = parsed_cuts_json();
-        doc["vertex"]["targets"]["cxc"]["peaks"][1].erase("sigma_cm");
+        ob(doc)["vertex"]["targets"]["cxc"]["peaks"][1].erase("sigma_cm");
         const std::string path = write_temp_json(doc, "vzpeaksig");
-        REQUIRE_THROWS_WITH(pi0::Cuts::load(path),
+        REQUIRE_THROWS_WITH(pi0::Cuts::load(path, "outbending"),
                             ContainsSubstring("vertex.targets.cxc.peaks[1].sigma_cm"));
         std::remove(path.c_str());
     }
@@ -584,10 +670,11 @@ TEST_CASE("Cuts::load refuses a config that contradicts core/Constants.hpp", "[c
 
     INFO("drifted key: " << key_a << "." << key_b);
     nlohmann::json doc = parsed_cuts_json();
-    doc[key_a][key_b] = bad_value;
+    // pairing lives in the polarity block since v1.0.0; beam stays shared.
+    (std::string(key_a) == "pairing" ? ob(doc)[key_a] : doc[key_a])[key_b] = bad_value;
     const std::string path = write_temp_json(doc, "drift");
 
-    REQUIRE_THROWS_WITH(pi0::Cuts::load(path), ContainsSubstring("Constants.hpp"));
+    REQUIRE_THROWS_WITH(pi0::Cuts::load(path, "outbending"), ContainsSubstring("Constants.hpp"));
     std::remove(path.c_str());
 }
 
@@ -597,9 +684,9 @@ TEST_CASE("Cuts::load refuses a config whose pid keys contradict the code", "[cu
     // otherwise the file could quietly describe a selection the code does not
     // implement, which is what the old tree's dead TOML keys were.
     nlohmann::json doc = parsed_cuts_json();
-    doc["photon"]["pid"] = 2112;  // a neutron, say
+    ob(doc)["photon"]["pid"] = 2112;  // a neutron, say
     const std::string path = write_temp_json(doc, "pid");
-    REQUIRE_THROWS_WITH(pi0::Cuts::load(path), ContainsSubstring("photon.pid"));
+    REQUIRE_THROWS_WITH(pi0::Cuts::load(path, "outbending"), ContainsSubstring("photon.pid"));
     std::remove(path.c_str());
 }
 
@@ -630,8 +717,11 @@ TEST_CASE("sampling fraction mu/sigma reproduce a hand-evaluated polynomial", "[
     }
 
     SECTION("inbending sector 1 -- the other table is not a copy of the first") {
-        constexpr double mu_a = 2.311088E-01, mu_b = 4.309933E-03, mu_c = -5.451627E-04,
-                         mu_d = 4.965823E-06;
+        // v1.0.0: the common aspects note (v3.1), Table 23, IB 'Average' row S1.
+        // (Up to v0.2.8 this test pinned the legacy SamplingFractionService IB
+        // block, 2.311088E-01 ..., which does not match the note.)
+        constexpr double mu_a = 2.172761E-01, mu_b = 9.874863E-03, mu_c = -1.460141E-03,
+                         mu_d = 4.856991E-05;
         const double p = 4.0;
         const double mu_expected = mu_a + mu_b * p + mu_c * p * p + mu_d * p * p * p;
         CHECK_THAT(sel::sf_mu(p, 1, sel::Polarity::Inbending), WithinRel(mu_expected, 1e-12));
@@ -1373,5 +1463,30 @@ TEST_CASE("pass_photon_scored evaluates the model only when the pre-filter passe
                                       g.pcal_lw_cm, g.beta, [probe] { return probe; }, c) ==
               sel::pass_photon(g.pid, g.px, g.py, g.pz, g.pcal_energy_gev, g.pcal_lv_cm,
                                g.pcal_lw_cm, g.beta, probe, c));
+    }
+}
+
+TEST_CASE("the inbending SF table is the common aspects note's Table 23 'Average' rows", "[sf][inbending]") {
+    // v1.0.0. Re-typed from the note (v3.1), Table 23, IB, 'Average', S1..S6:
+    // the constant terms a_mu and a_sigma, which are sf_mu/sf_sigma at p = 0, and
+    // the full polynomial at p = 4 GeV for every sector.
+    struct Row { int sector; double am, bm, cm, dm, as, bs, cs, ds; };
+    const Row rows[] = {
+        {1, 2.172761E-01, 9.874863E-03, -1.460141E-03, 4.856991E-05, 2.970359E-02, -6.146500E-03, 8.519948E-04, -4.106624E-05},
+        {2, 2.295669E-01, 5.180274E-03, -9.473454E-06, -8.477999E-05, 2.903474E-02, -5.861235E-03, 7.084581E-04, -1.055444E-05},
+        {3, 2.287942E-01, 6.720455E-03, -6.166277E-04, -2.783523E-05, 2.597826E-02, -4.096651E-03, 3.504637E-04, 4.854673E-07},
+        {4, 2.279671E-01, 7.922469E-03, -8.822416E-04, 6.664547E-07, 2.932152E-02, -5.793094E-03, 7.024527E-04, -2.655757E-05},
+        {5, 2.293399E-01, 6.470559E-03, -7.222006E-04, 5.215601E-06, 2.609526E-02, -4.366779E-03, 4.176203E-04, -9.356880E-06},
+        {6, 2.307398E-01, 5.277840E-03, -3.128345E-04, -5.064927E-05, 2.886612E-02, -5.828894E-03, 6.541773E-04, -1.334127E-05},
+    };
+    for (const Row& r : rows) {
+        INFO("sector " << r.sector);
+        const double p = 4.0;
+        CHECK_THAT(sel::sf_mu(0.0, r.sector, sel::Polarity::Inbending), WithinRel(r.am, 1e-12));
+        CHECK_THAT(sel::sf_sigma(0.0, r.sector, sel::Polarity::Inbending), WithinRel(r.as, 1e-12));
+        CHECK_THAT(sel::sf_mu(p, r.sector, sel::Polarity::Inbending),
+                   WithinRel(r.am + r.bm * p + r.cm * p * p + r.dm * p * p * p, 1e-12));
+        CHECK_THAT(sel::sf_sigma(p, r.sector, sel::Polarity::Inbending),
+                   WithinRel(r.as + r.bs * p + r.cs * p * p + r.ds * p * p * p, 1e-12));
     }
 }

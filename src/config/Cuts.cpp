@@ -295,7 +295,7 @@ std::vector<MultClass> read_mult_classes(const Reader& r, const std::string& pat
 
 }  // namespace
 
-Cuts Cuts::load(const std::string& json_path) {
+Cuts Cuts::load(const std::string& json_path, const std::string& polarity) {
     std::ifstream in(json_path);
     if (!in) {
         throw std::runtime_error("Cuts::load: cannot open '" + json_path + "'");
@@ -316,77 +316,70 @@ Cuts Cuts::load(const std::string& json_path) {
 
     // -- beam ---------------------------------------------------------------
     c.beam.energy_gev = r.num("beam.energy_gev");
-    c.beam.polarity = r.str("beam.polarity");
-    if (c.beam.polarity != "inbending" && c.beam.polarity != "outbending") {
-        r.fail("beam.polarity",
-               "is '" + c.beam.polarity + "', which is neither 'inbending' nor 'outbending'");
+
+    // -- polarity (v1.0.0) ----------------------------------------------------
+    // The caller names the polarity; the file holds one complete block per
+    // polarity. Every key of the electron, photon, pairing and vertex blocks is
+    // read from that block only, so nothing of the other polarity can leak in.
+    if (polarity != "inbending" && polarity != "outbending") {
+        throw std::runtime_error("Cuts::load: " + json_path + ": polarity '" + polarity +
+                                 "' is neither 'inbending' nor 'outbending'");
     }
+    c.beam.polarity = polarity;
+    const std::string P = "polarities." + polarity + ".";
+    (void)r.node("polarities." + polarity);  // a clear "MISSING" error naming the block
 
     // -- electron -----------------------------------------------------------
-    c.electron.chi2pid_min = r.num("electron.chi2pid_min");
-    c.electron.chi2pid_max = r.num("electron.chi2pid_max");
-    c.electron.min_momentum_gev = r.num("electron.min_momentum_gev");
-    c.electron.sf_n_sigma = r.num("electron.sampling_fraction.n_sigma");
-    c.electron.pcal_lv_min_cm = r.num("electron.pcal_lv_min_cm");
-    c.electron.pcal_lw_min_cm = r.num("electron.pcal_lw_min_cm");
-    c.electron.dc_edge_r1_cm = r.num("electron.dc_edge_r1_cm");
-    c.electron.dc_edge_r2_cm = r.num("electron.dc_edge_r2_cm");
-    c.electron.dc_edge_r3_cm = r.num("electron.dc_edge_r3_cm");
-    c.electron.status_min = r.integer("electron.trigger.status_abs_min");
-    c.electron.status_max = r.integer("electron.trigger.status_abs_max");
+    c.electron.chi2pid_min = r.num(P + "electron.chi2pid_min");
+    c.electron.chi2pid_max = r.num(P + "electron.chi2pid_max");
+    c.electron.min_momentum_gev = r.num(P + "electron.min_momentum_gev");
+    c.electron.sf_n_sigma = r.num(P + "electron.sampling_fraction.n_sigma");
+    c.electron.pcal_lv_min_cm = r.num(P + "electron.pcal_lv_min_cm");
+    c.electron.pcal_lw_min_cm = r.num(P + "electron.pcal_lw_min_cm");
+    c.electron.dc_edge_r1_cm = r.num(P + "electron.dc_edge_r1_cm");
+    c.electron.dc_edge_r2_cm = r.num(P + "electron.dc_edge_r2_cm");
+    c.electron.dc_edge_r3_cm = r.num(P + "electron.dc_edge_r3_cm");
+    c.electron.status_min = r.integer(P + "electron.trigger.status_abs_min");
+    c.electron.status_max = r.integer(P + "electron.trigger.status_abs_max");
 
     // -- dis ----------------------------------------------------------------
     // q2_max, w_max and y_min are deliberately absent from cuts.json (none is
-    // reachable at 10.53 GeV, so none ever rejected an event). Do not add reads
+    // reachable at 10.54 GeV, so none ever rejected an event). Do not add reads
     // for them here expecting to find something.
     c.dis.q2_min = r.num("dis.q2_min");
     c.dis.w_min = r.num("dis.w_min");
     c.dis.y_max = r.num("dis.y_max");
 
     // -- photon -------------------------------------------------------------
-    c.photon.gbt_threshold = r.num("photon.gbt_threshold");
-    c.photon.min_energy_gev = r.num("photon.min_energy_gev");
-    c.photon.theta_min_deg = r.num("photon.theta_min_deg");
-    c.photon.theta_max_deg = r.num("photon.theta_max_deg");
-    c.photon.pcal_lv_min_cm = r.num("photon.pcal_lv_min_cm");
-    c.photon.pcal_lw_min_cm = r.num("photon.pcal_lw_min_cm");
-    c.photon.beta_min = r.num("photon.beta_min");
-    c.photon.beta_max = r.num("photon.beta_max");
-    c.photon.gbt_pass = r.integer("photon.gbt_pass");
-    c.photon.allow_rga_fallback = r.boolean("photon.allow_rga_fallback");
+    c.photon.gbt_threshold = r.num(P + "photon.gbt_threshold");
+    c.photon.min_energy_gev = r.num(P + "photon.min_energy_gev");
+    c.photon.theta_min_deg = r.num(P + "photon.theta_min_deg");
+    c.photon.theta_max_deg = r.num(P + "photon.theta_max_deg");
+    c.photon.pcal_lv_min_cm = r.num(P + "photon.pcal_lv_min_cm");
+    c.photon.pcal_lw_min_cm = r.num(P + "photon.pcal_lw_min_cm");
+    c.photon.beta_min = r.num(P + "photon.beta_min");
+    c.photon.beta_max = r.num(P + "photon.beta_max");
+    c.photon.gbt_pass = r.integer(P + "photon.gbt_pass");
+    c.photon.allow_rga_fallback = r.boolean(P + "photon.allow_rga_fallback");
 
     // -- vertex -------------------------------------------------------------
-    // The windows the vz cut is drawn against. Until these were read here they
-    // were a hard-coded table in vertex/VzCorrector.cpp while this block sat in
-    // cuts.json unread -- the exact "declared, set, and never read" defect this
-    // file exists to end, with the added twist that the table also carried
-    // INBENDING windows the file never claimed to have.
-    //
-    // That table is gone, so there is nothing to fall back to, so the polarity
-    // must be checked rather than assumed: cuts.json's beam block says every
-    // polarity-dependent number in the file is the outbending set, and applying
-    // an outbending window to inbending data is precisely the silent
-    // wrong-number failure the table's deletion was meant to prevent. Refuse.
-    if (c.beam.polarity != "outbending") {
-        r.fail("beam.polarity",
-               "is 'inbending', but /vertex carries the OUTBENDING windows only -- as beam's own "
-               "_polarity_comment says of every polarity-dependent number in this file. There is "
-               "no inbending window anywhere in the project to fall back to (the hard-coded table "
-               "that once held one is deleted, deliberately). Adding inbending requires a "
-               "per-polarity /vertex block, not an edit of these numbers.");
-    }
-    c.vertex.ld2 = read_vertex_target(r, "vertex.targets.ld2");
-    c.vertex.cxc = read_vertex_target(r, "vertex.targets.cxc");
-    c.vertex.cu = read_vertex_target(r, "vertex.targets.cu");
-    c.vertex.sn = read_vertex_target(r, "vertex.targets.sn");
+    // The windows the vz cut is drawn against, from the requested polarity's
+    // block. Until v0.2.x they were a hard-coded table in vertex/VzCorrector.cpp
+    // and later an outbending-only /vertex block; since v1.0.0 each polarity
+    // block carries its own complete set (common aspects note, Table 6), so the
+    // inbending windows are real numbers from the note, not a fallback.
+    c.vertex.ld2 = read_vertex_target(r, P + "vertex.targets.ld2");
+    c.vertex.cxc = read_vertex_target(r, P + "vertex.targets.cxc");
+    c.vertex.cu = read_vertex_target(r, P + "vertex.targets.cu");
+    c.vertex.sn = read_vertex_target(r, P + "vertex.targets.sn");
 
     // -- pairing ------------------------------------------------------------
-    c.pairing.mass_window_gev = r.num("pairing.mass_window_gev");
-    c.pairing.min_mgg_gev = r.num("pairing.min_mgg_gev");
-    c.pairing.e_gamma_min_angle_deg = r.num("pairing.e_gamma_min_angle_deg");
-    c.pairing.open_a_deg = r.num("pairing.opening_angle.a_deg");
-    c.pairing.open_b_inv_gev = r.num("pairing.opening_angle.b_inv_gev");
-    c.pairing.open_offset_deg = r.num("pairing.opening_angle.offset_deg");
+    c.pairing.mass_window_gev = r.num(P + "pairing.mass_window_gev");
+    c.pairing.min_mgg_gev = r.num(P + "pairing.min_mgg_gev");
+    c.pairing.e_gamma_min_angle_deg = r.num(P + "pairing.e_gamma_min_angle_deg");
+    c.pairing.open_a_deg = r.num(P + "pairing.opening_angle.a_deg");
+    c.pairing.open_b_inv_gev = r.num(P + "pairing.opening_angle.b_inv_gev");
+    c.pairing.open_offset_deg = r.num(P + "pairing.opening_angle.offset_deg");
 
     // -- sidis ---------------------------------------------------------------
     //
@@ -399,10 +392,10 @@ Cuts Cuts::load(const std::string& json_path) {
     // These two keys were DECLARED AND NEVER READ until make_grid needed them --
     // this file's own defect, of exactly the kind its header warns about. See
     // the note on Cuts::sidis.
-    c.sidis.z_min = r.num("pairing.z_min");
-    c.sidis.z_max = r.num("pairing.z_max");
+    c.sidis.z_min = r.num(P + "pairing.z_min");
+    c.sidis.z_max = r.num(P + "pairing.z_max");
     if (!(c.sidis.z_min < c.sidis.z_max)) {
-        r.fail("pairing.z_max", "is " + std::to_string(c.sidis.z_max) + ", which is not above pairing.z_min (" +
+        r.fail(P + "pairing.z_max", "is " + std::to_string(c.sidis.z_max) + ", which is not above pairing.z_min (" +
                                     std::to_string(c.sidis.z_min) + "). The window z_min < z < z_max is empty, so the "
                                     "analysis would select no pi0 at all.");
     }
@@ -575,7 +568,7 @@ Cuts Cuts::load(const std::string& json_path) {
     // -- cross-checks against core/Constants.hpp ----------------------------
     require_agrees_with_constant(r, "beam.energy_gev", kBeamEnergyGeV, "kBeamEnergyGeV");
     require_agrees_with_constant(r, "beam.proton_mass_gev", kProtonMassGeV, "kProtonMassGeV");
-    require_agrees_with_constant(r, "pairing.pi0_mass_gev", kPi0MassGeV, "kPi0MassGeV");
+    require_agrees_with_constant(r, P + "pairing.pi0_mass_gev", kPi0MassGeV, "kPi0MassGeV");
 
     // -- cross-checks on keys the struct deliberately does NOT carry --------
     //
@@ -599,15 +592,15 @@ Cuts Cuts::load(const std::string& json_path) {
         }
     };
 
-    require_int_is("electron.trigger.pid", 11,
+    require_int_is(P + "electron.trigger.pid", 11,
                    "The trigger electron's PDG code is not a tunable threshold; it is not carried "
                    "in the Cuts struct.");
-    require_int_is("photon.pid", 22,
+    require_int_is(P + "photon.pid", 22,
                    "The photon's PDG code is not a tunable threshold; it is not carried in the "
                    "Cuts struct.");
-    require_true("electron.trigger.require_negative_status",
+    require_true(P + "electron.trigger.require_negative_status",
                  "find_trigger_electron() requires status < 0 unconditionally.");
-    require_true("photon.require_pcal_energy",
+    require_true(P + "photon.require_pcal_energy",
                  "The GBT pre-filter requires E_PCAL > 0 unconditionally.");
 
     return c;

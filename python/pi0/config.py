@@ -50,6 +50,8 @@ __all__ = [
     "Config",
     "load_config",
     "require",
+    "POLARITIES",
+    "cuts_for_polarity",
 ]
 
 
@@ -657,3 +659,35 @@ def _optional_float(node: Any, path: str) -> float | None:
             )
         cur = cur[key]
     return None if cur is None else float(cur)
+
+
+#: The two torus polarities, spelled as in cuts.json /polarities and stageA_skim --polarity.
+POLARITIES = ("outbending", "inbending")
+
+#: The cuts.json blocks that are per polarity since v1.0.0.
+_POLARITY_BLOCKS = ("electron", "photon", "pairing", "vertex")
+
+
+def cuts_for_polarity(cuts: dict[str, Any], polarity: str) -> dict[str, Any]:
+    """The cuts.json document as it reads for one torus polarity (v1.0.0).
+
+    Since v1.0.0 the electron, photon, pairing and vertex blocks live under
+    ``/polarities/<polarity>/``. This returns a shallow copy of ``cuts`` with
+    those four blocks lifted to the top level from the requested polarity, so
+    code that reads ``cuts["photon"]`` keeps working, and with ``/polarities``
+    removed so nothing can read the other polarity by accident. No default
+    polarity: the caller names it (from a farm config or a slim's provenance).
+
+    Raises
+    ------
+    ConfigError
+        On an unknown polarity, or if that polarity's block or any of its four
+        sub-blocks is missing.
+    """
+    if polarity not in POLARITIES:
+        raise ConfigError(f"polarity {polarity!r} is neither 'outbending' nor 'inbending'")
+    block = require(cuts, f"polarities/{polarity}", expect=dict)
+    out = {k: v for k, v in cuts.items() if k != "polarities"}
+    for name in _POLARITY_BLOCKS:
+        out[name] = require(block, name, expect=dict)
+    return out

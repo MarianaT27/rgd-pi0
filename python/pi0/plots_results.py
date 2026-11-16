@@ -114,8 +114,10 @@ def main(argv: list[str] | None = None) -> int:
     print(f"label: {label or '(none, inputs carry no provenance blockers)'}")
 
     def stamp(fig: "plt.Figure") -> None:
+        # v1.0.0: under the figure (savefig.bbox is "tight", so the page grows to hold it). At
+        # y = 0.01 inside the figure it sat on the x-axis title.
         if label:
-            fig.text(0.99, 0.01, label, ha="right", va="bottom", fontsize=8, color="0.4")
+            fig.text(0.99, 0.0, label, ha="right", va="top", fontsize=8, color="0.4")
 
     # --- Fig 1: R_A vs <z> --------------------------------------------------
     fig, ax = plt.subplots(figsize=(5.4, 4.0))

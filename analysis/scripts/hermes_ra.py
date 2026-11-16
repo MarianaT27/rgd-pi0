@@ -37,8 +37,9 @@ at the target's own mean of the variable (sideband-subtracted). For nu that mean
 <Q2> / (2 M <x_B>), because Stage B stores sums of Q2 and x_B but not of nu: an approximation.
 
 Differences from HERMES that remain:
-  - beam 10.54 GeV vs 27.6 GeV: RG-D covers nu < 8.96 GeV (y < 0.85), so only their first nu bins;
-    with nu > 6 GeV the other panels use 6 < nu < 8.96 GeV, the top of the RG-D range (y > 0.57)
+  - beam 10.54 GeV vs 27.6 GeV: RG-D covers nu < 8.74 GeV (nu = E - E' with the electron cut
+    p > 1.8 GeV; y < 0.85 alone would allow 8.96), so only their first nu bins; with nu > 6 GeV the
+    other panels use 6 < nu < 8.74 GeV, the top of the RG-D range (y > 0.57)
   - nuclei: C, Cu, Sn vs their He, Ne, Kr, Xe
   - pi0 identification, acceptance, radiative corrections: RG-D's (none applied here), not theirs
 

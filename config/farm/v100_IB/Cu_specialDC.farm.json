@@ -1,0 +1,62 @@
+{
+  "_comment": "Farm submission for the RG-D pi0 Stage A skim, target Cu, INBENDING runs (v1.0.0). Dry-run:\n  python -m pi0.batch config/farm/v100_IB/Cu_specialDC.farm.json\nSubmit:\n  python -m pi0.batch config/farm/v100_IB/Cu_specialDC.farm.json --submit\n\nThe job script passes --polarity inbending to stageA_skim, which then applies the /polarities/inbending block of config/cuts.json (electron cuts of the RG-D common aspects analysis note: DC edges Table 5, v_z windows Table 6, SF Table 23) and the inbending v_z corrector variant. THIS FILE DOES NOT CARRY CUT VALUES; it says only WHERE the data is and WHAT RESOURCES to ask for. CU AND SN READ THE SAME CuSn INPUT FILES, separated offline by the electron v_z window.",
+  "_schema_version": 1,
+  "_runlist_comment": "target Cu -> run list CuSn, INBENDING. pi0.batch refuses any input file whose run is not in the inbending list of config/runs.json, so the outbending runs in the same train directory are rejected before any job is made.",
+  "farm": {
+    "target": "Cu",
+    "polarity": "inbending",
+    "_polarity_comment": "Inbending production (v1.0.0), analysed separately from outbending (its own Stage B chain and results).",
+    "inputs": [
+      "/cache/clas12/rg-d/production/pass1/recon/CuSn/dst/train/sidis/"
+    ],
+    "_inputs_comment": "v0.2.2 production: the NEW SIDIS train (lower-case train/sidis/, one file per run, prescaled 1 in 5 for Q2 < 2.0 GeV2), not the 10% skim train/SIDIS/ of v0.2.1. A directory is scanned recursively for *.hipo; a glob or a literal file also work. /mss is tape -- SWIF2 stages each -input from tape to the node before the job runs. Use the /cache mirror instead if the files are already there. On a login node prefer `--file-list <list.dat>`: scanning 30k tape paths is slow, and the list is then a record of exactly what the production consumed.",
+    "files_per_job": 1,
+    "_files_per_job_comment": "1, matching clas-framework's scripts/swif2_pi0_skim.py -- the submitter that actually ran this skim, whose defaults are files-per-job 1, cores 1, ram 4G, disk 20G, time 4h. THE TIME LIMIT IS CALIBRATED PER FILE: raising files_per_job without raising `time` in step gives jobs that are killed at the limit. (clas-framework's general pi0.farm.toml pairs files_per_job 5 with time 16:00:00 -- the same ratio, roughly.) stageA_skim takes ONE HIPO file per invocation regardless (it exits 5 on a multi-run file), so a chunk >1 just means the job wrapper loops and writes slim_0..slim_N-1.root. Chunks never span runs.",
+    "exclude_runs": [],
+    "skip_foreign_run_runs": [],
+    "_skip_foreign_run_runs_comment": "Runs whose file is skimmed with stageA_skim --skip-foreign-run --run <run>. Empty: no inbending run is known to hold events of another run yet. If one does, Stage A exits 5 for it (the .out names both runs); add the run here and resubmit that run only.",
+    "_exclude_runs_comment": "Empty: only_runs already restricts this production to the special-DC runs.",
+    "only_runs": [
+      18358,
+      18359,
+      18360,
+      18361,
+      18362,
+      18363,
+      18364,
+      18365,
+      18366,
+      18368
+    ],
+    "_only_runs_comment": "ONLY the special-DC CuSn runs (config/runs.json special_DC_runs_CuSn), kept apart from the main inbending production in their own output folder, so they can be checked before they go into Stage B (decided 2026-11-16).",
+    "output_dir": "/volatile/clas12/mtenorio/pi0/rgd-pi0/farm_v100_IB/Cu_specialDC",
+    "log_dir": "/volatile/clas12/mtenorio/pi0/rgd-pi0/farm_v100_IB/Cu_specialDC/logs",
+    "_output_comment": "Slims land at <output_dir>/<run>/<job>/slim_<i>.root and logs at <log_dir>/<job>.log. SWIF2's -output does NOT create the parent directory, so the generated script mkdir -p's each one; without that the copy back is simply lost.",
+    "swif2": {
+      "workflow": "mt_rgd_pi0_stageA_v100_IB_Cu_specialDC",
+      "account": "clas12",
+      "partition": "production",
+      "cores": 1,
+      "_cores_comment": "stageA_skim is single-threaded (RHipoDS + a serial selection chain). Asking for more cores buys nothing and makes the job harder to schedule.",
+      "ram_gb": 8,
+      "disk_gb": 20,
+      "_disk_comment": "Must hold files_per_job staged HIPO DSTs plus their slims. A DST chunk is a few GB; the slim is ~100x smaller, so the staged inputs dominate.",
+      "time": "28:00:00",
+      "_time_comment": "Converted to SWIF2's seconds form (14400s) at synthesis. Budget ~20% over single-file wall clock x files_per_job. A malformed value is refused at parse time here, not by the scheduler after you have submitted.",
+      "constraint": "",
+      "modules": {
+        "load": [
+          "clas12",
+          "gcc/13.2.0"
+        ]
+      },
+      "_modules_comment": "An OBJECT with a `load` array, not a bare array -- a bare array parses fine and silently loads nothing, and a node without ROOT fails at runtime, not at submit.",
+      "tags": {
+        "stream": "pi0",
+        "pass": "pass1"
+      }
+    },
+    "env": {},
+    "_env_comment": "Exported in the job wrapper before the skim runs. Child of `farm`, NOT of `farm.swif2` -- this mirrors clas-framework, where the value is read from the farm table even though it is stored on the swif2 struct."
+  }
+}

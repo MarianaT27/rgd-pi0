@@ -46,6 +46,7 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 
+from .config import ConfigError, cuts_for_polarity
 from .farm import (
     FarmConfigError,
     RunListError,
@@ -77,7 +78,7 @@ def _read_listing(path: Path) -> list[str]:
         return [ln.strip() for ln in f if ln.strip() and not ln.lstrip().startswith("#")]
 
 
-def _preflight(cuts_path: Path, n_jobs: int) -> list[str]:
+def _preflight(cuts_path: Path, n_jobs: int, polarity: str) -> list[str]:
     """Everything that would make every job fail, checked once instead of N times.
 
     Returns a list of blocker strings; empty means go.
@@ -88,15 +89,18 @@ def _preflight(cuts_path: Path, n_jobs: int) -> list[str]:
     with cuts_path.open() as f:
         cuts = json.load(f)
 
-    photon = cuts.get("photon", {})
+    try:
+        photon = cuts_for_polarity(cuts, polarity)["photon"]
+    except ConfigError as e:
+        return [f"{cuts_path}: {e}"]
     if not photon.get("allow_rga_fallback", False):
         blockers.append(
-            "photon.allow_rga_fallback is false, and NO GBT PHOTON MODEL COVERS RG-D.\n"
+            f"photon.allow_rga_fallback is false ({polarity} block), and NO GBT PHOTON MODEL COVERS RG-D.\n"
             "      The model map stops at run 16772; RG-D is 18305-19131. stageA_skim will exit 3\n"
             f"      on every one of these {n_jobs} jobs. This is stageA_skim working as designed --\n"
             "      it refuses rather than scoring RG-D photons with an RG-A inbending model.\n"
-            "      To take the fallback anyway, set photon.allow_rga_fallback = true in\n"
-            "      config/cuts.json. Every output then carries gbt.fallback_used = TRUE and the\n"
+            "      To take the fallback anyway, set polarities/<polarity>/photon/allow_rga_fallback\n"
+            "      = true in config/cuts.json. Every output then carries gbt.fallback_used = TRUE and the\n"
             "      Python stage will refuse to publish from it without --allow-unpublishable.\n"
             "      Do that only for a study you intend to report as such."
         )
@@ -366,7 +370,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(f"\nnote: {msg}")
 
-    blockers = _preflight(cuts_path, len(chunks))
+    blockers = _preflight(cuts_path, len(chunks), cfg.polarity)
     fallback_only = not exe_problems  # --allow-rga-fallback-production forgives the GBT gap, not a bad exe
     blockers = exe_problems + blockers
     if blockers and not (args.allow_rga_fallback_production and fallback_only):
@@ -385,7 +389,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     with cuts_path.open() as f:
-        if json.load(f).get("photon", {}).get("allow_rga_fallback", False):
+        if cuts_for_polarity(json.load(f), cfg.polarity)["photon"].get("allow_rga_fallback", False):
             print("\n" + "!" * 76)
             print("photon.allow_rga_fallback IS TRUE. Every photon in this production will be scored")
             print("by an RG-A INBENDING PASS-1 model -- data it was not trained on. Every output will")

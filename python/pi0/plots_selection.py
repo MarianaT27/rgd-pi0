@@ -35,6 +35,8 @@ from pathlib import Path
 
 import numpy as np
 
+from .config import cuts_for_polarity
+
 __all__ = ["main"]
 
 # Matplotlib is imported lazily in main() so that --help works without it.
@@ -492,7 +494,11 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     _style()
-    cuts = _load_cuts(args.config)
+    import uproot as _up
+    _prov = _up.open(args.slim)["provenance"]
+    _pol = next((_title(_prov[k]) for k in _prov.keys() if k.split(";")[0] == "polarity"), "")
+    # v1.0.0: the cut values drawn are the ones of the polarity the slim was skimmed with.
+    cuts = cuts_for_polarity(_load_cuts(args.config), _pol)
     args.outdir.mkdir(parents=True, exist_ok=True)
     # Read + validate provenance always (raises if the block is missing); only
     # DRAW it when --stamp is given.

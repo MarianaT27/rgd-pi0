@@ -822,9 +822,10 @@ def test_skip_foreign_run_and_max_events_combine(tmp_path):
 
 def test_the_v022_configs_list_the_known_mixed_runs():
     """v0.2.8: the SIDIS-train file of run 19102 holds 2 events of run 19101 (Stage A exit 5 in
-    the v022 part1 production). Cu and Sn read the same CuSn files, so both list 19102; LD2
-    keeps 18540 (v0.2.3); CxC lists none."""
-    want = {"LD2": {18540}, "CxC": set(), "Cu": {19102}, "Sn": {19102}}
+    the v022 part1 production). v1.0.0: run 18753 holds 2 events of run 18752 (part2, job 105).
+    Cu and Sn read the same CuSn files, so both list 18753 and 19102; LD2 keeps 18540 (v0.2.3);
+    CxC lists none."""
+    want = {"LD2": {18540}, "CxC": set(), "Cu": {18753, 19102}, "Sn": {18753, 19102}}
     for t, runs in want.items():
         cfg = load_farm_config(CONFIG_DIR / "farm" / "v022" / f"{t}.farm.json")
         assert cfg.skip_foreign_run_runs == frozenset(runs), t
@@ -851,5 +852,93 @@ def test_v022_farm_configs_load_and_read_the_new_sidis_train():
         assert cfg.target == t
         assert all("/dst/train/sidis/" in i for i in cfg.inputs)
         assert "farm_v022" in cfg.output_dir
-        assert cfg.skip_foreign_run_runs == {"LD2": frozenset({18540}), "Cu": frozenset({19102}),
-                                             "Sn": frozenset({19102})}.get(t, frozenset())
+        assert cfg.skip_foreign_run_runs == {"LD2": frozenset({18540}), "Cu": frozenset({18753, 19102}),
+                                             "Sn": frozenset({18753, 19102})}.get(t, frozenset())
+
+
+# ---------------------------------------------------------------------------
+# v1.0.0: --polarity reaches stageA_skim, only_runs, the inbending configs
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("pol", ["outbending", "inbending"])
+def test_wrapper_passes_the_polarity_to_the_skim(tmp_path, pol):
+    """stageA_skim requires --polarity since v1.0.0 and picks its cuts.json block with it."""
+    cfg = load_farm_config(_cfg(tmp_path, polarity=pol))
+    w = stagea_wrapper(cfg, ["input_0.hipo"], "./stageA")
+    assert f"--config cuts.json --target LD2 --polarity {pol}" in w
+    p = tmp_path / "w.sh"
+    p.write_text(w)
+    assert subprocess.run(["bash", "-n", str(p)]).returncode == 0
+
+
+def test_an_unknown_polarity_is_refused_at_parse_time(tmp_path):
+    with pytest.raises(FarmConfigError, match="neither 'outbending' nor 'inbending'"):
+        load_farm_config(_cfg(tmp_path, polarity="Inbending"))
+
+
+def test_only_runs_is_off_by_default(tmp_path):
+    assert load_farm_config(_cfg(tmp_path)).only_runs is None
+
+
+def test_only_runs_keeps_only_the_listed_runs(tmp_path):
+    runs = load_runs(CONFIG_DIR)
+    cfg = load_farm_config(_cfg(tmp_path, only_runs=[18420]))
+    acc, rej = discover_inputs(cfg, runs, listing=[_dst(18419), _dst(18420), _dst(18305)])
+    assert [f.run for f in acc] == [18420]
+    reasons = sorted(r.reason for r in rej)
+    assert any("not in only_runs" in r for r in reasons)
+
+
+def test_only_runs_does_not_bypass_the_polarity_filter(tmp_path):
+    """only_runs narrows a run list; it never adds a run of the other polarity."""
+    runs = load_runs(CONFIG_DIR)
+    cfg = load_farm_config(_cfg(tmp_path, only_runs=[18305, 18419]))  # 18305 is inbending LD2
+    acc, _ = discover_inputs(cfg, runs, listing=[_dst(18305), _dst(18419)])
+    assert [f.run for f in acc] == [18419]
+
+
+@pytest.mark.parametrize("bad", [[], ["18420"], 18420])
+def test_only_runs_refuses_a_malformed_value(tmp_path, bad):
+    with pytest.raises(FarmConfigError, match="only_runs"):
+        load_farm_config(_cfg(tmp_path, only_runs=bad))
+
+
+def test_a_run_cannot_be_both_only_and_excluded(tmp_path):
+    with pytest.raises(FarmConfigError, match="only_runs and exclude_runs"):
+        load_farm_config(_cfg(tmp_path, only_runs=[18420], exclude_runs=[18420]))
+
+
+SPECIAL_DC = frozenset({18358, 18359, 18360, 18361, 18362, 18363, 18364, 18365, 18366, 18368})
+
+
+def test_v100_ib_configs_are_inbending_and_write_apart_from_outbending():
+    for name in ("LD2", "CxC", "Cu", "Sn", "Cu_specialDC", "Sn_specialDC"):
+        cfg = load_farm_config(CONFIG_DIR / "farm" / "v100_IB" / f"{name}.farm.json")
+        assert cfg.polarity == "inbending", name
+        assert cfg.target == name.split("_")[0], name
+        assert cfg.output_dir.endswith(f"/farm_v100_IB/{name}"), name
+        assert cfg.swif2.workflow == f"mt_rgd_pi0_stageA_v100_IB_{name}", name
+        assert all("/dst/train/sidis/" in i for i in cfg.inputs), name
+
+
+def test_v100_ib_special_dc_runs_are_split_off():
+    """The special-DC CuSn runs go ONLY to the *_specialDC productions (decided 2026-11-16)."""
+    runs = load_runs(CONFIG_DIR)
+    assert SPECIAL_DC <= runs_for(runs, "inbending", "Cu")
+    for t in ("Cu", "Sn"):
+        main = load_farm_config(CONFIG_DIR / "farm" / "v100_IB" / f"{t}.farm.json")
+        dc = load_farm_config(CONFIG_DIR / "farm" / "v100_IB" / f"{t}_specialDC.farm.json")
+        assert main.exclude_runs == SPECIAL_DC and main.only_runs is None, t
+        assert dc.only_runs == SPECIAL_DC and not dc.exclude_runs, t
+
+
+def test_v100_ib_acceptance_counts():
+    """Runs each IB production accepts from its run list: LD2 24, CxC 13, CuSn 37 = 27 + 10."""
+    runs = load_runs(CONFIG_DIR)
+    want = {"LD2": 24, "CxC": 13, "Cu": 27, "Sn": 27, "Cu_specialDC": 10, "Sn_specialDC": 10}
+    for name, n in want.items():
+        cfg = load_farm_config(CONFIG_DIR / "farm" / "v100_IB" / f"{name}.farm.json")
+        listing = [_train(r) for r in sorted(runs_for(runs, "inbending", cfg.target))]
+        acc, _ = discover_inputs(cfg, runs, listing=listing)
+        assert len(acc) == n, name

@@ -23,7 +23,7 @@ import numpy as np
 import uproot
 from numpy.typing import NDArray
 
-from .config import Binning, Config
+from .config import Binning, Config, ConfigError, cuts_for_polarity
 
 __all__ = [
     "ProvenanceError",
@@ -310,6 +310,18 @@ def _read_stage_a(f: uproot.ReadOnlyDirectory) -> Provenance:
     return Provenance(directory=f"provenance_stageA_[{len(names)} input(s)]", entries=merged)
 
 
+def _fallback_setting(cfg: Config, polarity: str) -> object:
+    """photon.allow_rga_fallback of the cuts.json block the data was skimmed with (v1.0.0).
+
+    For a message only, so an unknown or missing polarity reads as '?' rather
+    than raising: the blocker it decorates is raised either way.
+    """
+    try:
+        return cuts_for_polarity(cfg.raw, polarity)["photon"].get("allow_rga_fallback")
+    except ConfigError:
+        return "?"
+
+
 def check_provenance(prov: Provenance, prov_a: Provenance, cfg: Config) -> list[Blocker]:
     """Decide whether this file's numbers may be quoted as physics.
 
@@ -357,7 +369,8 @@ def check_provenance(prov: Provenance, prov_a: Provenance, cfg: Config) -> list[
                 f"(gbt.model={prov_a.get('gbt.model', '?')!r}): "
                 f"{prov_a.require('gbt.fallback_used')}. "
                 f"cuts.json sets photon.allow_rga_fallback = "
-                f"{cfg.raw.get('photon', {}).get('allow_rga_fallback')!r}. "
+                f"{_fallback_setting(cfg, prov_a.get('polarity', ''))!r} "
+                f"({prov_a.get('polarity', '?')} block). "
                 f"The photon selection is not the one the cuts describe.",
             )
         )

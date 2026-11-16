@@ -8,7 +8,8 @@
 //
 // usage:
 //   stageA_skim --input <file.hipo> --output <slim.root> --config <cuts.json>
-//               --target <LD2|CxC|Cu|Sn> [--run <N>] [--max-events <N>]
+//               --target <LD2|CxC|Cu|Sn> --polarity <outbending|inbending>
+//               [--run <N>] [--max-events <N>]
 //               [--qa-ntuple <qa.root>] [--skip-foreign-run]
 //
 // ---------------------------------------------------------------------------
@@ -233,6 +234,9 @@ struct Args {
     std::string output;
     std::string config;
     std::string target;
+    /// "outbending" or "inbending" (v1.0.0). REQUIRED: picks the cuts.json
+    /// polarity block, the sampling-fraction table and the v_z corrector variant.
+    std::string polarity;
     std::optional<int> run;  ///< overrides RUN_config_run[0] for the model lookup
     /// Skip events whose RUN::config.run is non-zero and differs from --run,
     /// instead of refusing the file (exit 5). Requires --run. Default off.
@@ -267,6 +271,7 @@ void print_usage(const char* argv0) {
     std::cerr
         << "usage: " << argv0 << " --input <file.hipo> --output <slim.root>\n"
         << "                        --config <cuts.json> --target <LD2|CxC|Cu|Sn>\n"
+        << "                        --polarity <outbending|inbending>\n"
         << "                        [--run <N>] [--max-events <N>] [--qa-ntuple <qa.root>]\n"
         << "                        [--threads <N>] [--partition-target <N>]\n"
         << "                        [--skip-foreign-run]\n"
@@ -276,6 +281,9 @@ void print_usage(const char* argv0) {
         << "  --config      the cut configuration. Every threshold comes from here.\n"
         << "  --target      RG-D target. Selects the vertex window, and for Cu/Sn IS the\n"
         << "                target assignment -- the two foils are distinguished only by v_z.\n"
+        << "  --polarity    torus polarity of the run: outbending or inbending. Selects the\n"
+        << "                cuts.json block /polarities/<polarity>, the sampling-fraction\n"
+        << "                table and the v_z corrector variant. Required; no default.\n"
         << "  --run         override the run number used to pick the GBT model. Normally the\n"
         << "                run is read from RUN::config; pass this only when you know the\n"
         << "                file's run number is wrong or absent.\n"
@@ -324,6 +332,7 @@ void print_usage(const char* argv0) {
         else if (flag == "--output") a.output = value();
         else if (flag == "--config") a.config = value();
         else if (flag == "--target") a.target = value();
+        else if (flag == "--polarity") a.polarity = value();
         else if (flag == "--run") {
             const std::string v = value();
             try {
@@ -409,6 +418,13 @@ void print_usage(const char* argv0) {
     if (a.output.empty()) throw std::runtime_error("--output is required");
     if (a.config.empty()) throw std::runtime_error("--config is required");
     if (a.target.empty()) throw std::runtime_error("--target is required");
+    if (a.polarity.empty()) {
+        throw std::runtime_error("--polarity is required (outbending or inbending). Since v1.0.0 the cuts are "
+                                 "per polarity, and no default is taken.");
+    }
+    if (a.polarity != "outbending" && a.polarity != "inbending") {
+        throw std::runtime_error("--polarity \"" + a.polarity + "\" is neither outbending nor inbending");
+    }
     // Without --run the file's run is the first non-zero RUN::config.run, so a
     // foreign event at the start of the file would become "the run" and every
     // real event would be skipped as foreign. Refuse rather than guess.
@@ -930,10 +946,10 @@ int main(int argc, char* argv[]) {
 
     try {
         // ---- configuration ------------------------------------------------
-        const pi0::Cuts cuts = pi0::Cuts::load(args.config);
+        const pi0::Cuts cuts = pi0::Cuts::load(args.config, args.polarity);
         const pi0::vertex::Target target = parse_target(args.target);
 
-        // One polarity string in cuts.json; two enums, because pi0::vertex and
+        // One polarity string (--polarity); two enums, because pi0::vertex and
         // pi0::selection are deliberately independent libraries and neither may
         // depend on the other's types. Both are parsed from the SAME string, so
         // they cannot disagree.

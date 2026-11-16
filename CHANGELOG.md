@@ -3,6 +3,83 @@
 One entry per patch, newest first. The version is the one in `meson.build` and
 `python/pi0/__init__.py`, and the git tag of the commit that applies the patch.
 
+## v1.0.0 (2026-11-16), patch `v1.0.0.patch`
+
+Applies on top of v0.2.8. Inbending is now supported: every polarity-dependent cut has an
+outbending and an inbending value, and the inbending values are those of the RG-D common aspects
+analysis note (v3.1). The outbending values do not change. `cuts.json` changes shape, so its
+sha256 changes: slims and binned files made with v0.2.8 or earlier show a config-hash mismatch
+when run through v1.0.0 Stage B or the Python extraction.
+
+### Changed: `config/cuts.json` holds one block per torus polarity
+- `/beam/polarity` is gone. `/electron`, `/photon`, `/pairing` and `/vertex` move to
+  `/polarities/outbending/...` (values unchanged, comments updated) and `/polarities/inbending/...`.
+  Everything else (`beam`, `dis`, `binning`, `mgg_histogram`, `bsa`, `broadening`, `extraction`,
+  `mixing`) is shared.
+- Inbending values, common aspects note v3.1:
+  - DC fiducial edges, Table 5 (IB, regional averages): R1 2.58, R2 2.51, R3 1.37 cm (OB: 1.88, 2.08, 8.62).
+  - v_z windows, Table 6, mu -+ 3 sigma after the v_z correction: Cu -7.765 / 0.321, Sn -2.812 / 0.315
+    (CuSn IB); CxC -7.670 / 0.313 and -2.713 / 0.307 (CxC IB). LD2 raw [-15, 5] cm, as outbending.
+  - Sampling fraction: Table 23, the Average coefficients (`SamplingFraction.cpp kInbending`; the old
+    rows were the legacy RG-A table and did not match the note). Outbending keeps Table 22, Average.
+  - Everything else as outbending (Table 7): p > 1.8 GeV, chi2pid within +-5, status in
+    (-4000, -2000], SF 3.5 sigma, PCAL lv, lw > 9 cm. Photon and pair cuts: the same values as
+    outbending, in their own block so they can change apart.
+- Comments: `mixing._comment` describes the frozen donor pool (the mix-then-insert text was stale);
+  the DIS comment says 10.54 GeV (was 10.53).
+
+### Changed: the code takes the polarity
+- `Cuts::load(path, polarity)` reads only `/polarities/<polarity>`; an unknown polarity or a missing
+  key is refused. The old refusal of inbending is removed.
+- **`stageA_skim --polarity <outbending|inbending>` is required.** It is written to the slim
+  provenance as `polarity` and picks the sampling-fraction table and the v_z corrector variant.
+  `pi0.batch` and `pi0.local_batch` pass the farm config's polarity. Stage A does not check the run
+  against `runs.json`; the run-list filter of `pi0.batch` does, as before.
+- `stageB_bin` and `make_grid` take the polarity from their inputs' Stage A provenance and refuse
+  inputs that disagree or carry none (`chain_polarity` in `InputChain.hpp`). The grid provenance
+  records `polarity`.
+- Python: `pi0.config.cuts_for_polarity(cuts, polarity)` lifts one block to the top level; `batch`,
+  `io` (RG-A fallback check), `plots_selection`, `plots_kinematics` and
+  `analysis/scripts/compare_pt_methods.py` use it with the polarity of the slims or farm config.
+- The stale comment "This is 2.0 GeV" in `ElectronSelection.cpp` now says p > 1.8 GeV from
+  `cuts.json` (note Table 7); `Cuts.hpp` and `Kinematics.hpp` comments updated likewise.
+
+### Added: inbending farm configs, `only_runs`
+- `config/farm/v100_IB/{LD2,CxC,Cu,Sn}.farm.json` (polarity inbending, output
+  `farm_v100_IB/<T>`) and `Cu_specialDC`, `Sn_specialDC` for the special-DC CuSn runs 18358 to
+  18366 and 18368: the main Cu and Sn configs exclude them, the special-DC ones keep only them,
+  so they land in their own folder. Accepted runs: LD2 24, CxC 13, Cu 27, Sn 27, special DC 10.
+- New optional farm key `only_runs`: keep only these runs of the list (an overlap with
+  `exclude_runs` is refused; it never adds a run of the other polarity).
+- `analysis/scripts/run_v100_IB_chain.sh`: the inbending Stage B, extraction and plots, written to
+  `analysis/v100_IB/`, apart from outbending. Default: the shipped Grid A and Grid B (the outbending
+  bins); `MAKE_IB_GRID=1` builds an inbending Grid A instead. It never writes `config/binning/`.
+
+### Changed: run 18753 skips its foreign events (Cu, Sn)
+- In the v022 part2 production, Cu and Sn job 105 failed with Stage A exit 5: the SIDIS-train
+  file of run 18753 holds 2 events of run 18752. `config/farm/v022/{Cu,Sn}.farm.json`:
+  `skip_foreign_run_runs` is `[18753, 19102]`.
+
+### Fixed: figures and text
+- The Preliminary label sits under the figure, not on the x-axis title, the points or the legend:
+  `pi0.plots_results` (all three figures), `analysis/scripts/ra.py` (R_A vs z, R_A vs z in nu panels).
+- `pi0.qa`: the Preliminary label and the provenance line were on one baseline and ran into each
+  other; now two lines under the figure.
+- `analysis/scripts/clas6_compare.py`: the titles cite Mineeva et al., PRC 112, 035203 (was the arXiv number).
+- `analysis/scripts/hermes_ra.py` docstring and the v0.2.6 entry below: RG-D reaches nu < 8.74 GeV
+  (E - E' with p_e > 1.8 GeV), not 8.96 (that is y < 0.85 alone).
+
+### Tests
+- C++: `test_selection` reads both blocks, refuses an unknown polarity, reads only the requested
+  block, and pins all six inbending SF rows; `test_inputchain` covers `chain_polarity`;
+  `test_donorpool` loads with outbending.
+- Python: new `test_cuts_polarity.py` (outbending equals v0.2.8 value by value,
+  `python/tests/data/cuts_v028_outbending_values.json`; inbending equals the note); `test_farm.py`
+  covers `--polarity` in the job script, `only_runs`, the v100_IB configs and the v022 skip lists.
+
+### Version
+- Version 1.0.0.
+
 ## v0.2.8 (2026-11-16), patch `v0.2.8.patch`
 
 Applies on top of v0.2.7. Farm configs only: no change to the code, the cuts or the run lists.
@@ -129,7 +206,7 @@ exactly as in v0.2.3. Stage B must be rebuilt (`meson compile -C build`) for the
 - **Grids** `config/binning/grid_A_q2_nu_hermes.json` (Q^2 = 1, 1.5, 2, 3, 4, 5, 6, 8, 25 GeV^2;
   nu = 4, 6, 8, 10 GeV) and `config/binning/grid_B_z_pt2_hermes.json` (z = 0.1, ..., 0.9, 1.3;
   p_T^2 = 0, 0.05, 0.1, 0.3, 0.5, 0.7, 0.9, 1.1, 1.4, 1.95, 5 GeV^2). nu > 6 and z > 0.2 are bin edges,
-  applied by bin selection. RG-D reaches nu < 8.96 GeV (y < 0.85 at 10.54 GeV): only the first three nu bins.
+  applied by bin selection. RG-D reaches nu < 8.74 GeV (E - E' with p_e > 1.8 GeV; corrected in v1.0.0, was 8.96 from y < 0.85): only the first three nu bins.
 - **`stageB_bin --xf-min X`**: keeps only pi0 pairs with x_F > X, same- and mixed-event, right after the
   z window. Default: no x_F cut. X must be in (-1, 1). A pair with x_F not computed (NaN) is dropped.
   - New provenance key `pairs.xf_min`, always written (`none (the default: no x_F cut)` without the flag).

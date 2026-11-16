@@ -72,6 +72,19 @@ energy — is a physics error waiting for the day the two stop coinciding.
    bound in a config invites a reader to believe a cut exists where none does.
    Do not restore them. The same goes for the vacuous `y_min = 0.0`.
 
+## Torus polarity (v1.0.0)
+
+`cuts.json` holds one block of polarity-dependent cuts per torus polarity:
+`/polarities/outbending/{electron,photon,pairing,vertex}` and
+`/polarities/inbending/{...}`. Everything else (`beam`, `dis`, `binning`, `mgg_histogram`,
+`bsa`, `broadening`, `extraction`, `mixing`) is shared. The polarity is NOT set in this
+file: `stageA_skim --polarity` chooses the block, Stage B and `make_grid` take it from
+their inputs' Stage A provenance, and the Python side reads it the same way
+(`pi0.config.cuts_for_polarity`). The outbending values are those of v0.2.8; the
+inbending ones are the RG-D common aspects analysis note (v3.1): DC edges Table 5,
+v_z windows Table 6, sampling fraction Table 23 (Average), the rest Table 7.
+A path written `electron.x` below means `/polarities/<polarity>/electron/x`.
+
 ## Format
 
 Plain JSON — parses with any standard parser, no JSONC, no comment syntax, no

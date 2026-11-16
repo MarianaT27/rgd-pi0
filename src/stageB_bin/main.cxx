@@ -852,8 +852,37 @@ int main(int argc, char* argv[]) {
     }
 
     try {
+        // ---- the chain -----------------------------------------------------
+        // Read every input's identity and provenance, order the chain, and
+        // REFUSE anything that cannot be one run -- ALL of it before a single
+        // event is read. Two full passes over 30,866 files is not a thing to
+        // discover a mixed target at the end of, and a chain that should not have
+        // run must not leave a plausible output behind it.
+        std::vector<ChainInput> chain;
+        chain.reserve(args.inputs.size());
+        for (const std::string& path : args.inputs) {
+            ChainInput ci;
+            ci.path = path;
+            ci.sha256 = pi0::util::sha256_file(path);
+            {
+                std::unique_ptr<TFile> in(TFile::Open(path.c_str(), "READ"));
+                if (in == nullptr || in->IsZombie()) throw std::runtime_error("cannot open the input file: " + path);
+                ci.prov = Provenance::read(*in);
+            }
+            chain.push_back(std::move(ci));
+        }
+        pi0::stageB::order_canonically(chain);
+        pi0::stageB::validate_chain(chain, args.allow_truncated_inputs);
+
+        // ---- polarity (v1.0.0) ----------------------------------------------
+        // cuts.json holds one block per torus polarity, and the pairing cuts
+        // this stage applies come from it. The polarity is the one Stage A
+        // skimmed with, read from the inputs' provenance; validate_chain has
+        // already refused a chain whose inputs disagree on it.
+        const std::string polarity = pi0::stageB::chain_polarity(chain);
+
         // ---- configuration ------------------------------------------------
-        const pi0::Cuts cuts = pi0::Cuts::load(args.config);
+        const pi0::Cuts cuts = pi0::Cuts::load(args.config, polarity);
         const pi0::Binning binning = pi0::Binning::load(args.grid_a, args.grid_b);
         const std::string config_sha = pi0::util::sha256_file(args.config);
 
@@ -882,28 +911,6 @@ int main(int argc, char* argv[]) {
             if (iz < 0 || ixf < 0 || imgg < 0) return -1;
             return (static_cast<long long>(iz) * n_xf + ixf) * n_mgg + imgg;
         };
-
-        // ---- the chain -----------------------------------------------------
-        // Read every input's identity and provenance, order the chain, and
-        // REFUSE anything that cannot be one run -- ALL of it before a single
-        // event is read. Two full passes over 30,866 files is not a thing to
-        // discover a mixed target at the end of, and a chain that should not have
-        // run must not leave a plausible output behind it.
-        std::vector<ChainInput> chain;
-        chain.reserve(args.inputs.size());
-        for (const std::string& path : args.inputs) {
-            ChainInput ci;
-            ci.path = path;
-            ci.sha256 = pi0::util::sha256_file(path);
-            {
-                std::unique_ptr<TFile> in(TFile::Open(path.c_str(), "READ"));
-                if (in == nullptr || in->IsZombie()) throw std::runtime_error("cannot open the input file: " + path);
-                ci.prov = Provenance::read(*in);
-            }
-            chain.push_back(std::move(ci));
-        }
-        pi0::stageB::order_canonically(chain);
-        pi0::stageB::validate_chain(chain, args.allow_truncated_inputs);
 
         // Beam polarization: every run must lie in a polarization period of
         // cuts.json /bsa/polarization/periods. Refused up front, so no run is ever

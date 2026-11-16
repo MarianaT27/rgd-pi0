@@ -27,6 +27,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.text import Annotation
 import numpy as np
 from numpy.typing import NDArray
 
@@ -52,15 +53,26 @@ _AXIS_LABEL = {
 
 
 def _stamp(fig, data: io.StageBData) -> None:
-    """Print the file's provenance along the bottom of a figure."""
+    """Print the file's provenance, and the Preliminary label if any, BELOW the figure.
+
+    v1.0.0: both used to sit on the same baseline inside the bottom 1.5% of the figure, so a long
+    provenance line ran into the label and both touched the x-axis title. Now the label (if any)
+    is the first line under the figure and the provenance the line under it; every caller saves
+    with bbox_inches="tight", which grows the page to hold them.
+    """
     txt = data.stamp()
     colour = "crimson" if data.blockers else "0.35"
-    fig.text(0.005, 0.004, txt, fontsize=5.0, color=colour, ha="left", va="bottom")
+    anchor = None
     if any(x.fatal for x in data.blockers):
-        fig.text(
-            0.995, 0.004, io.preliminary_label(data), fontsize=7.0, color="crimson",
-            ha="right", va="bottom", transform=fig.transFigure,
-        )
+        anchor = fig.text(0.995, -0.005, io.preliminary_label(data), fontsize=7.0, color="crimson",
+                          ha="right", va="top")
+    if anchor is None:
+        fig.text(0.005, -0.005, txt, fontsize=5.0, color=colour, ha="left", va="top")
+    else:
+        # x in figure fraction, y at the bottom of the label: always the line below it
+        fig.add_artist(Annotation(txt, xy=(0.005, 0.0), xycoords=(fig.transFigure, anchor),
+                                  xytext=(0, -2), textcoords="offset points",
+                                  fontsize=5.0, color=colour, ha="left", va="top"))
 
 
 def plot_spectrum(
@@ -132,8 +144,8 @@ def plot_spectrum(
     ax1.set_ylabel("counts / 1.5 MeV")
     ax1.legend(fontsize=7.5, loc="upper right")
     _stamp(fig, data)
-    fig.tight_layout(rect=(0, 0.015, 1, 1))
-    fig.savefig(path, dpi=150)
+    fig.tight_layout()
+    fig.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -161,8 +173,8 @@ def plot_fit_vs_bin(res: list[BinYield], path: Path, data: io.StageBData) -> Non
     axes[2].set_xlabel("4D bin index")
     axes[0].set_title("Mass fit vs bin", fontsize=10)
     _stamp(fig, data)
-    fig.tight_layout(rect=(0, 0.015, 1, 1))
-    fig.savefig(path, dpi=150)
+    fig.tight_layout()
+    fig.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -190,8 +202,8 @@ def plot_alpha_vs_bin(res: list[BinYield], path: Path, data: io.StageBData) -> N
     ax.set_title("Sideband scale vs bin", fontsize=10)
     ax.grid(alpha=0.25)
     _stamp(fig, data)
-    fig.tight_layout(rect=(0, 0.03, 1, 1))
-    fig.savefig(path, dpi=150)
+    fig.tight_layout()
+    fig.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -244,8 +256,8 @@ def plot_abscissa_vs_centre(
         fontsize=10,
     )
     _stamp(fig, data)
-    fig.tight_layout(rect=(0, 0.015, 1, 0.95))
-    fig.savefig(path, dpi=150)
+    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    fig.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
     return len(ok)
 

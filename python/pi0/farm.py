@@ -234,6 +234,10 @@ class FarmConfig:
     #: any OTHER run found in that run's file are dropped, every event of the run
     #: itself is kept. Empty = every run is skimmed exactly as before v0.2.3.
     skip_foreign_run_runs: frozenset[int] = frozenset()
+    #: v1.0.0: if set, ONLY these runs are accepted (after the run-list filter and
+    #: exclude_runs). For a production of a named subset kept apart from the rest,
+    #: e.g. the special-DC CuSn runs. None = no restriction.
+    only_runs: frozenset[int] | None = None
 
 
 def load_farm_config(path: str | Path) -> FarmConfig:
@@ -263,6 +267,8 @@ def load_farm_config(path: str | Path) -> FarmConfig:
             f"({', '.join(sorted(TARGET_TO_RUNLIST))})."
         )
     polarity = farm.get("polarity", "outbending")
+    if polarity not in ("outbending", "inbending"):
+        raise FarmConfigError(f"{where}/polarity: {polarity!r} is neither 'outbending' nor 'inbending'.")
 
     inputs = _require(farm, "inputs", where)
     if isinstance(inputs, str):
@@ -317,6 +323,16 @@ def load_farm_config(path: str | Path) -> FarmConfig:
             f"events of other runs. Say which one you mean."
         )
 
+    only = farm.get("only_runs", None)
+    if only is not None:
+        if not isinstance(only, list) or not only or not all(isinstance(r, int) and not isinstance(r, bool) for r in only):
+            raise FarmConfigError(f"{where}/only_runs: want a non-empty array of run numbers (integers), or no key.")
+        overlap = sorted(set(only) & exclude)
+        if overlap:
+            raise FarmConfigError(
+                f"{where}: run(s) {overlap} are in both only_runs and exclude_runs; a run cannot be both "
+                f"the only ones wanted and excluded."
+            )
     return FarmConfig(
         target=target,
         polarity=polarity,
@@ -329,6 +345,7 @@ def load_farm_config(path: str | Path) -> FarmConfig:
         env={str(k): str(v) for k, v in env.items()},
         source=path,
         skip_foreign_run_runs=skip_foreign,
+        only_runs=None if only is None else frozenset(only),
     )
 
 
@@ -453,6 +470,9 @@ def discover_inputs(
             continue
         if run in cfg.exclude_runs:
             rejected.append(Rejected(path, f"run {run} is in exclude_runs"))
+            continue
+        if cfg.only_runs is not None and run not in cfg.only_runs:
+            rejected.append(Rejected(path, f"run {run} is not in only_runs"))
             continue
         if run not in wanted:
             rejected.append(
@@ -620,7 +640,7 @@ def stagea_wrapper(
         "        rc=4; continue",
         "    fi",
         f"    {_q(exe)} --input \"$in\" --output \"$out\" \\",
-        f"        --config cuts.json --target {_q(cfg.target)}"
+        f"        --config cuts.json --target {_q(cfg.target)} --polarity {_q(cfg.polarity)}"
         + (f" --max-events {int(max_events)}" if max_events else "")
         + (f" --skip-foreign-run --run {int(run)}"
            if run is not None and int(run) in cfg.skip_foreign_run_runs else ""),

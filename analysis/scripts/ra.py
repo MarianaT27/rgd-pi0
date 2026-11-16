@@ -97,11 +97,13 @@ ax.axhline(1.0, color="gray", ls="--", lw=1)
 ax.set_xlabel(r"$\langle z \rangle$")
 ax.set_ylabel(r"$R_A^{\pi^0}$")
 ax.set_title(r"RG-D $\pi^0$ multiplicity ratio vs $z$")
-ax.text(0.5, 0.04, TAG, transform=ax.transAxes, ha="center", fontsize=8, color="gray")
 ax.legend(frameon=False)
 fig.tight_layout()
+# v1.0.0: the label goes under the figure, not inside the axes, where it ran into the points and
+# the legend; bbox_inches="tight" grows the page to hold it.
+fig.text(0.5, 0.0, TAG, ha="center", va="top", fontsize=8, color="gray")
 for ext in ("pdf", "png"):
-    fig.savefig(f"{OUT}/ra_vs_z_{S}.{ext}", dpi=150)
+    fig.savefig(f"{OUT}/ra_vs_z_{S}.{ext}", dpi=150, bbox_inches="tight")
 plt.close(fig)
 
 # ---------------------------------------------------------------- R_A vs z in nu panels
@@ -142,10 +144,10 @@ for p, ax in enumerate(axes):
     ax.set_xlabel(r"$\langle z \rangle$")
 axes[0].set_ylabel(r"$R_A$")
 axes[0].legend(frameon=False)
-axes[0].text(0.02, 0.03, TAG, transform=axes[0].transAxes, fontsize=7, color="gray")
 fig.tight_layout()
+fig.text(0.5, 0.0, TAG, ha="center", va="top", fontsize=8, color="gray")   # under the figure (v1.0.0)
 for ext in ("pdf", "png"):
-    fig.savefig(f"{OUT}/ra_vs_z_nu_{S}.{ext}", dpi=150)
+    fig.savefig(f"{OUT}/ra_vs_z_nu_{S}.{ext}", dpi=150, bbox_inches="tight")
 plt.close(fig)
 
 # ---------------------------------------------------------------- pi0 vs pi+ thesis

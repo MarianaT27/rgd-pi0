@@ -61,12 +61,12 @@ namespace {
 
 /// The shipped pool grid, from the real config/cuts.json.
 const PoolGridCuts& shipped_grid() {
-    static const Cuts c = Cuts::load(PI0_CUTS_JSON);
+    static const Cuts c = Cuts::load(PI0_CUTS_JSON, "outbending");
     return c.mixing.pool_grid;
 }
 
 const MixingCuts& shipped_mixing() {
-    static const Cuts c = Cuts::load(PI0_CUTS_JSON);
+    static const Cuts c = Cuts::load(PI0_CUTS_JSON, "outbending");
     return c.mixing;
 }
 

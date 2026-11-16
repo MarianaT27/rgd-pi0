@@ -5,7 +5,7 @@
 ///
 /// Units: momenta and energies in GeV, angles in DEGREES at every boundary.
 /// The beam is assumed to travel along +z, and the INCIDENT electron to be
-/// massless (E_beam = |k|, exact to a relative 1e-9 at 10.53 GeV). The
+/// massless (E_beam = |k|, exact to a relative 1e-9 at 10.54 GeV). The
 /// SCATTERED electron's energy is whatever the caller passes as `e_energy` --
 /// this file makes no mass assumption about it. stageA_skim passes
 /// sqrt(p^2 + m_e^2); see pi0::energy_from_p in core/Constants.hpp.

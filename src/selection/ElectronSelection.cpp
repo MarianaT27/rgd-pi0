@@ -121,8 +121,8 @@ ElectronCutResult pass_electron(double chi2pid,
         return {false, electron_stage::kChi2Pid};
     }
 
-    // 2. momentum. This is 2.0 GeV. The old cutflow's "> 0.8 GeV" row label was
-    //    a stale string; the applied cut was always this one.
+    // 2. momentum: p > electron.min_momentum_gev from cuts.json (1.8 GeV, common
+    //    aspects note Table 7).
     if (!(p_gev > e.min_momentum_gev)) {
         return {false, electron_stage::kMomentum};
     }

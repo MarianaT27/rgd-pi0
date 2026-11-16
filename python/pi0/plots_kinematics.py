@@ -29,6 +29,8 @@ from pathlib import Path
 
 import numpy as np
 
+from .config import cuts_for_polarity
+
 TARGETS = [("LD2", "LD2"), ("CxC", "C×C"), ("Cu", "Cu"), ("Sn", "Sn")]
 COLORS = {"LD2": "black", "CxC": "#1f77b4", "Cu": "#d62728", "Sn": "#2ca02c"}  # standard target colours
 
@@ -141,6 +143,22 @@ def _load_slims(slimdir: Path, target: str, max_events: int | None) -> dict:
     return {c: np.concatenate(acc[c]) if acc[c] else np.array([]) for c in cols}
 
 
+def _slims_polarity(slimdir: Path) -> str:
+    """The torus polarity recorded in the Stage A provenance of every slim under slimdir.
+
+    Raises if they disagree or none records one: the pairing cuts are per polarity.
+    """
+    import uproot
+    pols = set()
+    for f in sorted(slimdir.rglob("slim_*.root")):
+        prov = uproot.open(f)["provenance"]
+        key = next((k for k in prov.keys() if k.split(";")[0] == "polarity"), None)
+        pols.add(str(prov[key].member("fTitle")) if key else "")
+    if len(pols) != 1 or "" in pols:
+        raise SystemExit(f"slims under {slimdir} record polarities {sorted(pols)}; need exactly one")
+    return pols.pop()
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="pi0 kinematic-coverage figures.")
     p.add_argument("--slimdir", type=Path, required=True,
@@ -155,7 +173,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="cap events read per target (coverage plot; default 400k)")
     args = p.parse_args(argv)
     args.outdir.mkdir(parents=True, exist_ok=True)
-    cuts = json.load(open(args.config / "cuts.json"))
+    # v1.0.0: the pairing cuts are per polarity; use the one the slims were skimmed with.
+    cuts = cuts_for_polarity(json.load(open(args.config / "cuts.json")), _slims_polarity(args.slimdir))
 
     import matplotlib as mpl
     mpl.use("Agg")

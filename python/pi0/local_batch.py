@@ -109,14 +109,14 @@ def _install_sigint(procs: dict[int, subprocess.Popen]) -> None:
     signal.signal(signal.SIGINT, handler)
 
 
-def _run_one(job: Job, exe: str, cuts: Path, target: str, max_events: int | None,
+def _run_one(job: Job, exe: str, cuts: Path, target: str, polarity: str, max_events: int | None,
              procs: dict[int, subprocess.Popen]) -> Result:
     if _ABORT:
         return Result(job, 130, 0.0)
     job.out.parent.mkdir(parents=True, exist_ok=True)
     job.log.parent.mkdir(parents=True, exist_ok=True)
     cmd = [exe, "--input", job.src.path, "--output", str(job.out),
-           "--config", str(cuts), "--target", target]
+           "--config", str(cuts), "--target", target, "--polarity", polarity]
     if max_events:
         cmd += ["--max-events", str(max_events)]
     t0 = time.monotonic()
@@ -198,11 +198,13 @@ def main(argv: list[str] | None = None) -> int:
             runs = load_runs(args.config)
             accepted, rejected = discover_inputs(cfg, runs)
             target = cfg.target
+            polarity = cfg.polarity
         else:
             if not args.target:
                 print("error: --input needs --target.", file=sys.stderr)
                 return 1
             target = args.target
+            polarity = args.polarity
             root = args.input
             paths = (sorted(str(x) for x in root.rglob("*.hipo")) if root.is_dir()
                      else [str(root)] if root.is_file() else [])
@@ -247,7 +249,7 @@ def main(argv: list[str] | None = None) -> int:
         for i, f in enumerate(accepted)
     ]
 
-    print(f"target      : {target} ({args.polarity})")
+    print(f"target      : {target} ({polarity})")
     print(f"files       : {len(jobs)}")
     print(f"runs        : {len({j.src.run for j in jobs})}")
     print(f"concurrent  : {args.concurrent}")
@@ -260,7 +262,7 @@ def main(argv: list[str] | None = None) -> int:
         print("\nDRY RUN. First 5 commands:")
         for j in jobs[:5]:
             print(f"  {args.exe} --input {j.src.path} --output {j.out} "
-                  f"--config {cuts} --target {target}")
+                  f"--config {cuts} --target {target} --polarity {polarity}")
         if len(jobs) > 5:
             print(f"  ... and {len(jobs) - 5} more")
         return 0
@@ -275,7 +277,7 @@ def main(argv: list[str] | None = None) -> int:
     # a captured log -- exactly the split Progress exists to handle.
     bar = Progress(f"skim {target}", len(jobs))
     with ThreadPoolExecutor(max_workers=args.concurrent) as ex:
-        futs = {ex.submit(_run_one, j, args.exe, cuts, target, args.max_events, procs): j for j in jobs}
+        futs = {ex.submit(_run_one, j, args.exe, cuts, target, polarity, args.max_events, procs): j for j in jobs}
         for fut in as_completed(futs):
             results.append(fut.result())
             bar.add()

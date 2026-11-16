@@ -81,8 +81,8 @@ namespace pi0::vertex {
 /// configuration, resolved one at a time by the peak window.
 enum class Target { LD2, CxC, Cu, Sn };
 
-/// Torus polarity. This project is OUTBENDING-only for now, but the params file
-/// carries the inbending variants and they stay loadable.
+/// Torus polarity. The params file carries both variants; since v1.0.0 the
+/// inbending ones are used for the inbending production.
 enum class Polarity { Inbending, Outbending };
 
 /// Human-readable tag, for error messages and logs.
@@ -155,13 +155,12 @@ struct VzTargetCuts {
 /// The discrepancy itself is unexplained and is recorded, not resolved.
 ///
 /// ---------------------------------------------------------------------------
-/// OUTBENDING ONLY
+/// PER POLARITY (v1.0.0)
 /// ---------------------------------------------------------------------------
-/// cuts.json's /vertex block is the outbending set, as its beam block says of
-/// every polarity-dependent number in the file. There is no inbending window
-/// here and no hard-coded table to fall back to -- pi0::Cuts::load() refuses an
-/// inbending config outright rather than apply these numbers to it. Adding
-/// inbending means adding a per-polarity block to cuts.json, not editing these.
+/// cuts.json holds one /vertex block per polarity (/polarities/<polarity>/vertex);
+/// pi0::Cuts::load(path, polarity) fills this struct from the requested one only.
+/// The inbending windows are the common aspects note's Table 6 values. There is
+/// still no hard-coded table to fall back to.
 struct VertexCuts {
     VzTargetCuts ld2{};
     VzTargetCuts cxc{};

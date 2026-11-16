@@ -37,6 +37,7 @@
 // input and cannot flake.
 
 #include <string>
+#include <algorithm>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -394,4 +395,45 @@ TEST_CASE("prov_lookup distinguishes an absent key from an empty value",
     REQUIRE(prov_lookup(p, "empty")->empty());
     REQUIRE_FALSE(prov_lookup(p, "absent").has_value());
     REQUIRE(p.get("empty") == p.get("absent"));  // ... which is why get() will not do
+}
+
+// ===========================================================================
+// chain_polarity (v1.0.0) -- which cuts.json polarity block stageB_bin loads
+// ===========================================================================
+
+TEST_CASE("chain_polarity returns the polarity every input records", "[inputchain][polarity]") {
+    const std::vector<ChainInput> ob = {input("/data/a.root", 'a', stagea("LD2", "18419")),
+                                        input("/data/b.root", 'b', stagea("LD2", "18420"))};
+    CHECK(chain_polarity(ob) == "outbending");
+
+    Provenance ib = stagea("LD2", "18305");
+    for (auto& [k, v] : ib.entries) {
+        if (k == "polarity") v = "inbending";
+    }
+    CHECK(chain_polarity({input("/data/ib.root", 'c', ib)}) == "inbending");
+}
+
+TEST_CASE("chain_polarity refuses a chain it cannot assign one polarity to", "[inputchain][polarity]") {
+    SECTION("an input that records no polarity") {
+        Provenance none = stagea("LD2");
+        none.entries.erase(std::remove_if(none.entries.begin(), none.entries.end(),
+                                          [](const auto& kv) { return kv.first == "polarity"; }),
+                           none.entries.end());
+        REQUIRE_THROWS_WITH(chain_polarity({input("/data/old.root", 'a', none)}), ContainsSubstring("/data/old.root"));
+    }
+    SECTION("mixed polarities") {
+        Provenance ib = stagea("LD2");
+        for (auto& [k, v] : ib.entries) {
+            if (k == "polarity") v = "inbending";
+        }
+        REQUIRE_THROWS_WITH(chain_polarity({input("/data/a.root", 'a', stagea("LD2")), input("/data/b.root", 'b', ib)}),
+                            ContainsSubstring("polarities"));
+    }
+    SECTION("an unknown spelling") {
+        Provenance odd = stagea("LD2");
+        for (auto& [k, v] : odd.entries) {
+            if (k == "polarity") v = "sideways";
+        }
+        REQUIRE_THROWS_WITH(chain_polarity({input("/data/a.root", 'a', odd)}), ContainsSubstring("sideways"));
+    }
 }

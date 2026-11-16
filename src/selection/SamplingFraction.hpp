@@ -32,13 +32,11 @@
 
 namespace pi0::selection {
 
-/// Torus polarity. Spelled "inbending"/"outbending" in cuts.json's
-/// `beam.polarity`; this project ships outbending, but both tables are present
-/// because they were both in the source and dropping one would be a silent
-/// edit of a data table.
+/// Torus polarity, spelled "inbending"/"outbending" (stageA_skim --polarity,
+/// cuts.json /polarities/<polarity>). Both tables are used since v1.0.0.
 enum class Polarity { Inbending, Outbending };
 
-/// Parse cuts.json's `beam.polarity` spelling.
+/// Parse the "inbending"/"outbending" spelling (Cuts::beam.polarity).
 /// \throws std::runtime_error on anything but "inbending"/"outbending".
 [[nodiscard]] Polarity polarity_from_string(const std::string& polarity);
 

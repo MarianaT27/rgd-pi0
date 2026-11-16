@@ -3,7 +3,8 @@ clas6_compare.py : RG-D pi0 multiplicity ratios in the bins of the CLAS6 (EG2, 5
 paper, overlaid with its published values.
 
 Reference: T. Mineeva et al. (CLAS), "Suppression of neutral pion production in deep-inelastic
-scattering off nuclei with the CLAS detector", arXiv:2406.04513, Appendix B, Tables I and II
+scattering off nuclei with the CLAS detector", Phys. Rev. C 112, 035203 (published version;
+the figure titles cite it since v1.0.0), arXiv:2406.04513, Appendix B, Tables I and II
 (analysis note v16, 2020-07-13, Table 3.9 for the bin edges). Their values are in
 analysis/scripts/mineeva2024_tables.csv, transcribed from the arXiv v3 PDF (162 rows:
 Table I 18 blocks x 6 pT2 bins, Table II 9 blocks x 6 z bins). Blocks were assigned in table
@@ -183,7 +184,7 @@ def fig2(s2, out):
     ax.legend([h[i] for i in order], [lab[i] for i in order], frameon=False, fontsize=LEGEND_FONTSIZE + 1,
               ncol=2, loc="lower left", markerscale=1.4)
     ax.set_title(r"$\pi^0$ $R_A$ in all 9 CLAS6 ($Q^2$, $\nu$) bins, $p_T^2<1.5$ GeV$^2$" "\n"
-                 r"RG-D vs Mineeva et al. arXiv:2406.04513; stat. errors", fontsize=10)
+                 r"RG-D vs Mineeva et al., PRC 112, 035203; stat. errors", fontsize=10)
     fig.tight_layout()
     for ext in ("pdf", "png"):
         fig.savefig(out / f"clas6_fig2.{ext}", dpi=150)
@@ -277,7 +278,7 @@ def main():
                 ax.set_ylabel(r"$R_A$")
     axs[0, -1].legend(frameon=False, fontsize=LEGEND_FONTSIZE, ncol=2, markerscale=1.4)
     fig.suptitle(r"$\pi^0$ $R_A$ in the CLAS6 (Q$^2$, $\nu$, $z$) bins, $p_T^2<1.5$ GeV$^2$; "
-                 "RG-D (filled) vs Mineeva et al. arXiv:2406.04513 (open); stat. errors", fontsize=10)
+                 "RG-D (filled) vs Mineeva et al., PRC 112, 035203 (open); stat. errors", fontsize=10)
     fig.tight_layout()
     for ext in ("pdf", "png"):
         fig.savefig(out / f"clas6_q2_nu_z.{ext}", dpi=140)
@@ -300,7 +301,7 @@ def main():
                 ax.set_ylabel(r"$R_A$")
     axs[0, -1].legend(frameon=False, fontsize=LEGEND_FONTSIZE, ncol=2, markerscale=1.4)
     fig.suptitle(r"$\pi^0$ $R_A$ in the CLAS6 ($\nu$, $z$, $p_T^2$) bins, $1<Q^2<4.1$ GeV$^2$; "
-                 "RG-D (filled) vs Mineeva et al. arXiv:2406.04513 (open); stat. errors", fontsize=10)
+                 "RG-D (filled) vs Mineeva et al., PRC 112, 035203 (open); stat. errors", fontsize=10)
     fig.tight_layout()
     for ext in ("pdf", "png"):
         fig.savefig(out / f"clas6_nu_z_pt2.{ext}", dpi=140)

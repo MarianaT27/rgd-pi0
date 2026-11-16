@@ -278,6 +278,33 @@ inline void validate_chain(const std::vector<ChainInput>& inputs, bool allow_tru
     return out;
 }
 
+/// The torus polarity the chain was skimmed with, from its Stage A provenance
+/// (v1.0.0). stageB_bin loads the cuts.json block of this polarity.
+///
+/// \throws std::runtime_error if no input records a polarity (a slim from before
+///         Stage A wrote one cannot say which block to load), if every input does
+///         not record one, or if they disagree (validate_chain refuses that first
+///         for a multi-input chain; this repeats it so the function stands alone).
+[[nodiscard]] inline std::string chain_polarity(const std::vector<ChainInput>& inputs) {
+    for (const ChainInput& in : inputs) {
+        const std::optional<std::string> v = prov_lookup(in.prov, "polarity");
+        if (!v.has_value() || v->empty()) {
+            throw std::runtime_error("input " + in.path + " records no Stage A polarity, so it cannot say which "
+                                     "cuts.json polarity block applies. Re-skim it with stageA_skim --polarity.");
+        }
+    }
+    const std::vector<std::string> pols = distinct_values(inputs, "polarity");
+    if (pols.size() != 1) {
+        throw std::runtime_error("the inputs were skimmed with different torus polarities; outbending and "
+                                 "inbending slims cannot share one Stage B run.");
+    }
+    if (pols.front() != "outbending" && pols.front() != "inbending") {
+        throw std::runtime_error("the inputs record polarity '" + pols.front() +
+                                 "', which is neither outbending nor inbending.");
+    }
+    return pols.front();
+}
+
 /// The chain's content digest: what the seed is derived from.
 ///
 /// \param inputs  ALREADY in canonical order (order_canonically).

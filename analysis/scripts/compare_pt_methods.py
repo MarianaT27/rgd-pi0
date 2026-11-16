@@ -43,7 +43,10 @@ FILES = sys.argv[2:]
 cuts = json.load(open("config/cuts.json"))
 EB = cuts["beam"]["energy_gev"]
 MP, MPI = 0.938272, 0.1349768
-EGAMMA_MIN = cuts["pairing"]["e_gamma_min_angle_deg"]
+# v1.0.0: the pairing cuts are per torus polarity; take the one of the first slim.
+_prov = uproot.open(FILES[0])["provenance"]
+_pol = str(_prov[next(k for k in _prov.keys() if k.split(";")[0] == "polarity")].member("fTitle"))
+EGAMMA_MIN = cuts["polarities"][_pol]["pairing"]["e_gamma_min_angle_deg"]
 
 cols = ["nu", "w", "ex", "ey", "ez", "gpx", "gpy", "gpz", "g_e_gamma_deg"]
 parts = [uproot.open(f)["events"].arrays(cols) for f in FILES]

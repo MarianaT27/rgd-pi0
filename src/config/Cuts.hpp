@@ -58,12 +58,14 @@ struct PolarizationPeriod {
 struct Cuts {
     struct {
         double energy_gev{};    ///< beam energy, GeV. Pinned to pi0::kBeamEnergyGeV at load.
-        std::string polarity{}; ///< "inbending" or "outbending"; anything else throws.
+        /// "inbending" or "outbending": the polarity block load() was asked for (v1.0.0).
+        /// Not read from the file any more -- the file holds both blocks.
+        std::string polarity{};
     } beam;
 
     struct {
         double chi2pid_min{}, chi2pid_max{};  ///< open interval, strict at both ends
-        double min_momentum_gev{};            ///< p > this. It is 2.0. It has ALWAYS been 2.0.
+        double min_momentum_gev{};            ///< p > this (1.8 GeV in cuts.json; common aspects note Table 7)
         double sf_n_sigma{};                  ///< from electron.sampling_fraction.n_sigma
         double pcal_lv_min_cm{}, pcal_lw_min_cm{};  ///< 9.0 -- NOT the photon's 14.0
         double dc_edge_r1_cm{}, dc_edge_r2_cm{}, dc_edge_r3_cm{};  ///< DC layers 6 / 18 / 36
@@ -211,19 +213,25 @@ struct Cuts {
     /// For Cu and Sn this block is not merely a quality cut -- it IS the target
     /// assignment, since the two foils are distinguished only by v_z.
     ///
-    /// OUTBENDING ONLY. cuts.json's /vertex block is the outbending set and
-    /// there is no hard-coded table behind it, so load() refuses an inbending
-    /// config rather than silently apply these numbers to it.
+    /// PER POLARITY (v1.0.0): from /polarities/<polarity>/vertex/targets. There
+    /// is no hard-coded table behind it; each polarity block carries its own
+    /// windows, and load() reads only the block it was asked for.
     pi0::vertex::VertexCuts vertex{};
 
-    /// Parse `json_path` and return a fully populated Cuts.
+    /// Parse `json_path` and return a fully populated Cuts for one torus polarity.
+    ///
+    /// \param polarity "outbending" or "inbending". REQUIRED, with no default
+    ///        (v1.0.0): the electron, photon, pairing and vertex blocks are read from
+    ///        /polarities/<polarity>/, and a default would silently pick a set of
+    ///        windows for data taken with the other field. stageA_skim takes it from
+    ///        --polarity; stageB_bin and make_grid from their inputs' provenance.
     ///
     /// \throws std::runtime_error if the file cannot be opened, is not valid
     ///         JSON, is missing ANY key this loader reads, has a key of the
-    ///         wrong JSON type, carries an unknown polarity, or disagrees with
+    ///         wrong JSON type, is asked for an unknown polarity, or disagrees with
     ///         core/Constants.hpp about a physics constant. There is no partial
     ///         success and no defaulting: you get every value or an exception.
-    [[nodiscard]] static Cuts load(const std::string& json_path);
+    [[nodiscard]] static Cuts load(const std::string& json_path, const std::string& polarity);
 
     /// Index into bsa.polarization of the period that contains `run`, or -1 if
     /// no period does. Callers must treat -1 as an error, never as "unpolarized".
