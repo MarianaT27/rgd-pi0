@@ -3,6 +3,27 @@
 One entry per patch, newest first. The version is the one in `meson.build` and
 `python/pi0/__init__.py`, and the git tag of the commit that applies the patch.
 
+## v0.2.8 (2026-11-16), patch `v0.2.8.patch`
+
+Applies on top of v0.2.7. Farm configs only: no change to the code, the cuts or the run lists.
+
+### Changed: run 19102 is skimmed with `--skip-foreign-run --run 19102`
+- In the v022 part1 production (2026-11-15) the Cu and Sn job 66 failed with Stage A exit 5:
+  the SIDIS-train file `sidis_019102.hipo` holds 2 events of run 19101 next to 11721840 events
+  of run 19102. Same issue as run 18540 (v0.2.2, v0.2.3).
+- `config/farm/v022/Cu.farm.json` and `Sn.farm.json`: `skip_foreign_run_runs` goes from `[]` to
+  `[19102]`, and its comment says why. Cu and Sn read the same CuSn files, so both need it.
+- Stage A then drops the 2 events of run 19101 and keeps every event of run 19102. No other run
+  changes. The 207 jobs that succeeded each read a single-run file, so they stay as they are.
+
+### Tests (`test_farm.py`)
+- New `test_the_v022_configs_list_the_known_mixed_runs`: the four v022 configs list exactly
+  LD2 18540, Cu 19102, Sn 19102 (CxC none), and the Cu wrapper adds the option for 19102 only.
+- `test_v022_farm_configs_load_and_read_the_new_sidis_train`: expects 19102 for Cu and Sn (was empty).
+
+### Version
+- Version 0.2.8.
+
 ## v0.2.7 (2026-11-15), patch `v0.2.7.patch`
 
 Applies on top of v0.2.6. Run lists only: no change to the cuts, Stage A, Stage B or the extraction.

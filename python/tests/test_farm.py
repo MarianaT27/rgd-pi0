@@ -820,6 +820,19 @@ def test_skip_foreign_run_and_max_events_combine(tmp_path):
     assert "--max-events 100 --skip-foreign-run --run 18540" in w
 
 
+def test_the_v022_configs_list_the_known_mixed_runs():
+    """v0.2.8: the SIDIS-train file of run 19102 holds 2 events of run 19101 (Stage A exit 5 in
+    the v022 part1 production). Cu and Sn read the same CuSn files, so both list 19102; LD2
+    keeps 18540 (v0.2.3); CxC lists none."""
+    want = {"LD2": {18540}, "CxC": set(), "Cu": {19102}, "Sn": {19102}}
+    for t, runs in want.items():
+        cfg = load_farm_config(CONFIG_DIR / "farm" / "v022" / f"{t}.farm.json")
+        assert cfg.skip_foreign_run_runs == frozenset(runs), t
+    cfg = load_farm_config(CONFIG_DIR / "farm" / "v022" / "Cu.farm.json")
+    assert "--skip-foreign-run --run 19102" in stagea_wrapper(cfg, ["input_0.hipo"], "./stageA", run=19102)
+    assert "--skip-foreign-run" not in stagea_wrapper(cfg, ["input_0.hipo"], "./stageA", run=19101)
+
+
 def test_skip_foreign_run_refuses_non_integers(tmp_path):
     with pytest.raises(FarmConfigError, match="skip_foreign_run_runs"):
         load_farm_config(_cfg(tmp_path, skip_foreign_run_runs=["18540"]))
@@ -838,4 +851,5 @@ def test_v022_farm_configs_load_and_read_the_new_sidis_train():
         assert cfg.target == t
         assert all("/dst/train/sidis/" in i for i in cfg.inputs)
         assert "farm_v022" in cfg.output_dir
-        assert cfg.skip_foreign_run_runs == (frozenset({18540}) if t == "LD2" else frozenset())
+        assert cfg.skip_foreign_run_runs == {"LD2": frozenset({18540}), "Cu": frozenset({19102}),
+                                             "Sn": frozenset({19102})}.get(t, frozenset())
